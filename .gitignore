@@ -1,0 +1,15 @@
+# Compiled binaries
+/hugo-carve
+/cmd/hugo-carve/hugo-carve
+
+# Hugo build output in the example site
+/example/public/
+/example/resources/
+/example/.hugo_build.lock
+
+# Generated HTML produced by the preprocessor from .crv sources.
+# These are build artifacts; the .crv files are the source of truth.
+/example/content/**/*.html
+
+# Scratch / temp files
+_*

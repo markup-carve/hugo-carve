@@ -1,0 +1,20 @@
++++
+title = "Carve on Hugo"
+date = 2026-06-20
++++
+
+# Welcome to Carve on Hugo
+
+This page was authored in *Carve* and converted to HTML by /hugo-carve/
+before Hugo built the site.
+
+## Why a preprocessor
+
+Hugo has no public plugin API for new markup languages, so we convert
+`.crv` files to HTML content pages first. Highlights:
+
+- Front matter is preserved, so Hugo still reads the `title`.
+- The Carve body is rendered to HTML by the embedded engine.
+- Re-running the converter is idempotent.
+
+Read more at the [Carve site](https://github.com/markup-carve).
