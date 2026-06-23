@@ -1,0 +1,14 @@
+baseURL = "https://example.org/"
+title = "Carve on Hugo"
+
+# The Carve sources are converted to .html by hugo-carve and live next to the
+# generated pages. Tell Hugo to ignore the raw sources so they are not copied
+# into the built site.
+ignoreFiles = ['\.crv$', '\.carve$']
+
+# hugo-carve converts *.crv into *.html content pages. Hugo renders the HTML
+# body verbatim, but it denies raw "text/html" content by default
+# (security.allowContent defaults to ['! ^text/html$']). Because the converter
+# produces HTML content pages, that policy must be relaxed to allow text/html.
+[security]
+  allowContent = ['^text/html$']

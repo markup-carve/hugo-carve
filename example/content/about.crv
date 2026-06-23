@@ -1,0 +1,10 @@
++++
+title = "About"
++++
+
+# About This Site
+
+A second page, also written in *Carve*.
+
+- It has its own front matter.
+- Hugo reads the title from it.
