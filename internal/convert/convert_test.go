@@ -3,6 +3,8 @@ package convert
 import (
 	"strings"
 	"testing"
+
+	carve "github.com/markup-carve/carve-go"
 )
 
 // TestConvert_BodyHTML verifies that the Carve body is rendered to HTML with
@@ -136,6 +138,54 @@ func TestConvert_LeadingBraceIsBodyNotFrontMatter(t *testing.T) {
 	}
 	if !strings.Contains(res.BodyHTML, "<h1") {
 		t.Errorf("body should be rendered by the Carve engine, got %q", res.BodyHTML)
+	}
+}
+
+// TestCarveGo_CodeCallouts verifies that the embedded carve-go wasm renders
+// code-callout markers (<N>) inside a fenced code block to the expected HTML
+// when the bundled extensions are enabled. Callout markers in the source
+// replace the literal angle-bracket token with a <b class="callout"> element,
+// and the callout list below the block becomes an <ol class="callouts">.
+func TestCarveGo_CodeCallouts(t *testing.T) {
+	src := "```go\nx := 1 // <1>\ny := 2 // <2>\n```\n\n<1> assign x\n<2> assign y\n"
+	html, err := carve.ToHTMLOptions(src, carve.Options{Extensions: []string{"all"}})
+	if err != nil {
+		t.Fatalf("ToHTMLOptions error: %v", err)
+	}
+	assertions := []struct {
+		name string
+		want string
+	}{
+		{"callout-marker-1", `class="callout" data-callout="1"`},
+		{"callout-marker-2", `class="callout" data-callout="2"`},
+		{"callout-list", `class="callouts"`},
+		{"callout-label-1", `assign x`},
+		{"callout-label-2", `assign y`},
+	}
+	for _, a := range assertions {
+		if !strings.Contains(html, a.want) {
+			t.Errorf("%s: expected %q in HTML, got:\n%s", a.name, a.want, html)
+		}
+	}
+}
+
+// TestCarveGo_CitationsAsMentionSpans documents that citation syntax ([@key])
+// renders as a mention span through the WASI/CLI path rather than a full
+// bibliography citation. This is an upstream architecture boundary: the
+// bibliography extension requires a CSL-JSON data source passed by the host,
+// which cannot cross the WASI stdio contract used by carve-go. The rendered
+// form is a <span class="mention"> wrapping the key - not a bug in this repo.
+func TestCarveGo_CitationsAsMentionSpans(t *testing.T) {
+	src := "See [@smith2020] for details.\n"
+	html, err := carve.ToHTML(src)
+	if err != nil {
+		t.Fatalf("ToHTML error: %v", err)
+	}
+	if !strings.Contains(html, `class="mention"`) {
+		t.Errorf("expected mention span for citation, got:\n%s", html)
+	}
+	if !strings.Contains(html, "smith2020") {
+		t.Errorf("expected citation key preserved in output, got:\n%s", html)
 	}
 }
 
