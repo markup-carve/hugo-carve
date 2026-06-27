@@ -157,6 +157,30 @@ hugo
 # open example/public/index.html
 ```
 
+## Styling
+
+Carve renders constructs such as admonitions, code groups, spoilers, math, and
+mentions to HTML that needs CSS to look right. A ready-to-use stylesheet,
+vendored from the canonical Carve theme, ships with the example at
+[`example/assets/css/carve.css`](example/assets/css/carve.css). Its rules are
+scoped to a `.carve-content` wrapper, so apply it by wrapping the rendered page
+content in an element with that class and linking the stylesheet, as the example
+layout does:
+
+```html
+<!-- example/layouts/_default/baseof.html -->
+{{ with resources.Get "css/carve.css" }}
+<link rel="stylesheet" href="{{ .RelPermalink }}">
+{{ end }}
+...
+<main class="carve-content">{{ block "main" . }}{{ end }}</main>
+```
+
+The stylesheet is self-contained: it defines its color, font, and background
+variables (`--vp-c-*`) up front, with light-mode defaults you can override in
+your own CSS. Copy the file into your own site's `assets/` (or a theme) to reuse
+it outside the example.
+
 ## Development
 
 This repo uses a local `replace` for `carve-go` during development:

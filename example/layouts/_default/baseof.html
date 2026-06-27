@@ -4,10 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ .Title }} | {{ .Site.Title }}</title>
+  {{ with resources.Get "css/carve.css" }}
+  <link rel="stylesheet" href="{{ .RelPermalink }}">
+  {{ end }}
 </head>
 <body>
   <header><a href="{{ "/" | relURL }}">{{ .Site.Title }}</a></header>
-  <main>
+  <main class="carve-content">
     {{ block "main" . }}{{ end }}
   </main>
 </body>
