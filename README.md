@@ -16,7 +16,7 @@ own binary for a new extension.
 
 So `hugo-carve` is **not** a drop-in renderer plugin. It is a **preprocessor**:
 a small Go CLI that runs *before* `hugo`. It walks your `content/` tree,
-converts every `*.crv` / `*.carve` file's body to HTML using
+converts every `*.crv` file's body to HTML using
 [`carve-go`](https://github.com/markup-carve/carve-go), preserves the file's
 front matter verbatim, and writes a sibling `*.html` content page. Hugo then
 builds the site normally, reading the front matter for `title` and other params
@@ -43,7 +43,7 @@ foo.crv  ──hugo-carve──▶  foo.html  ──hugo──▶  public/foo/in
 (front matter + Carve)    (front matter + HTML)   (final page)
 ```
 
-1. `hugo-carve` splits each `.crv`/`.carve` file into front matter and body.
+1. `hugo-carve` splits each `.crv` file into front matter and body.
 2. The body is rendered to HTML by the embedded Carve engine (`carve-go`, a
    WASI build of `carve-rs` driven by the pure-Go wazero runtime: no cgo, no
    external binary).
@@ -88,7 +88,7 @@ into your watch tooling).
 ```
 Usage: hugo-carve [flags]
 
-Converts *.crv / *.carve files into Hugo HTML content pages.
+Converts *.crv files into Hugo HTML content pages.
 
   -clean
         remove generated .html outputs instead of building them
@@ -123,7 +123,7 @@ It is also recommended to stop Hugo from copying the raw `.crv` sources into the
 built site (they sit next to the generated `.html`):
 
 ```toml
-ignoreFiles = ['\.crv$', '\.carve$']
+ignoreFiles = ['\.crv$']
 ```
 
 ## Sample

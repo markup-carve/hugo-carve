@@ -1,5 +1,5 @@
 // Command hugo-carve is a preprocessor that converts Carve content files
-// (*.crv / *.carve) into Hugo-consumable HTML content pages.
+// (*.crv) into Hugo-consumable HTML content pages.
 //
 // Hugo exposes no public plugin API for registering a third-party markup
 // language, so hugo-carve runs BEFORE `hugo`: it renders each Carve file's
@@ -41,7 +41,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	quiet := fs.Bool("quiet", false, "suppress per-file log output")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: hugo-carve [flags]\n\n")
-		fmt.Fprintf(stderr, "Converts *.crv / *.carve files into Hugo HTML content pages.\n\n")
+		fmt.Fprintf(stderr, "Converts *.crv files into Hugo HTML content pages.\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -67,7 +67,7 @@ type converter struct {
 }
 
 // carveExts are the recognized Carve file extensions.
-var carveExts = []string{".crv", ".carve"}
+var carveExts = []string{".crv"}
 
 func isCarve(name string) bool {
 	ext := strings.ToLower(filepath.Ext(name))
