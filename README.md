@@ -94,10 +94,16 @@ Converts *.crv files into Hugo HTML content pages.
         remove generated .html outputs instead of building them
   -content string
         content directory to scan for Carve files (default "content")
+  -extensions
+        enable the bundled extensions (diagram presets - mermaid, plantuml, d2,
+        graphviz, ... - plus details, spoiler, code-callouts, color, math)
   -out string
         output directory (default: in place, next to the source)
   -quiet
         suppress per-file log output
+  -static
+        self-contained static HTML: flatten interactive constructs and degrade
+        diagrams/math to source (implies -extensions)
 ```
 
 - `--content DIR` selects the tree to scan (default `content`).
@@ -105,6 +111,16 @@ Converts *.crv files into Hugo HTML content pages.
   mirroring the source layout, instead of next to the `.crv` source. Useful if
   you prefer to keep generated files out of your authored tree.
 - `--clean` removes the generated `.html` files (the inverse operation).
+- `--extensions` enables the engine's bundled extensions. Diagram fences then
+  render as hydration elements (`<pre class="plantuml">`, `<pre class="mermaid">`,
+  ...) that a client-side or build-step renderer turns into pictures - e.g.
+  Graphviz/D2 offline via [`@markup-carve/carve-grammars`](https://github.com/markup-carve/carve-grammars)
+  WASM helpers, PlantUML via a Kroki server, Mermaid via mermaid.js. Without the
+  flag, diagram fences stay plain code blocks.
+- `--static` renders self-contained HTML: interactive constructs are flattened
+  and diagrams/math degrade to their source. Implies `--extensions`. (carve-go
+  has no build-time image renderer over the WASI boundary, so static mode
+  degrades diagrams to source rather than embedding an image.)
 
 ## Required Hugo configuration
 

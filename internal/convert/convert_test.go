@@ -195,3 +195,40 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// TestConvertWithOptions_ExtensionsEnableDiagrams verifies that a plantuml fence
+// renders as a hydration element only when Extensions is set (core Carve leaves
+// it a plain code block).
+func TestConvertWithOptions_ExtensionsEnableDiagrams(t *testing.T) {
+	src := "``` plantuml\nA -> B\n```\n"
+
+	off, err := Convert(src)
+	if err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+	if strings.Contains(off.BodyHTML, `class="plantuml"`) {
+		t.Fatalf("core Carve should not render the diagram, got %q", off.BodyHTML)
+	}
+
+	on, err := ConvertWithOptions(src, Options{Extensions: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	if !strings.Contains(on.BodyHTML, `<pre class="plantuml">A -> B</pre>`) {
+		t.Fatalf("expected plantuml hydration element, got %q", on.BodyHTML)
+	}
+}
+
+// TestConvertWithOptions_StaticDegradesDiagrams verifies static mode degrades a
+// diagram fence to its source as a code block, not a client hydration element.
+func TestConvertWithOptions_StaticDegradesDiagrams(t *testing.T) {
+	res, err := ConvertWithOptions("``` mermaid\ngraph TD; A-->B\n```\n", Options{Static: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	// Degraded form carries the source in an inner <code class="language-...">;
+	// a live hydration element would be a bare <pre class="mermaid"> with no code.
+	if !strings.Contains(res.BodyHTML, `<code class="language-mermaid">`) {
+		t.Fatalf("static mode should degrade the diagram to a source code block, got %q", res.BodyHTML)
+	}
+}

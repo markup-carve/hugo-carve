@@ -39,6 +39,8 @@ func run(args []string, stdout, stderr *os.File) error {
 	outDir := fs.String("out", "", "output directory (default: in place, next to the source)")
 	clean := fs.Bool("clean", false, "remove generated .html outputs instead of building them")
 	quiet := fs.Bool("quiet", false, "suppress per-file log output")
+	extensions := fs.Bool("extensions", false, "enable the bundled extensions (diagram presets - mermaid, plantuml, d2, graphviz, ... - plus details, spoiler, code-callouts, color, math)")
+	static := fs.Bool("static", false, "self-contained static HTML: flatten interactive constructs and degrade diagrams/math to source (implies -extensions)")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: hugo-carve [flags]\n\n")
 		fmt.Fprintf(stderr, "Converts *.crv files into Hugo HTML content pages.\n\n")
@@ -53,6 +55,8 @@ func run(args []string, stdout, stderr *os.File) error {
 		outDir:     *outDir,
 		clean:      *clean,
 		quiet:      *quiet,
+		extensions: *extensions,
+		static:     *static,
 		log:        stdout,
 	}
 	return c.walk()
@@ -63,6 +67,8 @@ type converter struct {
 	outDir     string
 	clean      bool
 	quiet      bool
+	extensions bool
+	static     bool
 	log        *os.File
 }
 
@@ -149,7 +155,10 @@ func (c *converter) convertFile(src string) error {
 		return fmt.Errorf("read %q: %w", src, err)
 	}
 
-	res, err := convert.Convert(string(srcBytes))
+	res, err := convert.ConvertWithOptions(string(srcBytes), convert.Options{
+		Extensions: c.extensions,
+		Static:     c.static,
+	})
 	if err != nil {
 		return fmt.Errorf("convert %q: %w", src, err)
 	}
