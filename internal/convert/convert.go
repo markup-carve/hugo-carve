@@ -43,9 +43,35 @@ type Result struct {
 // no-op for the front matter and never re-renders HTML as Carve, which keeps
 // the CLI idempotent when run against already-converted trees.
 func Convert(source string) (Result, error) {
+	return ConvertWithOptions(source, Options{})
+}
+
+// Options configures a conversion. The zero value renders core Carve (no
+// bundled extensions), matching Convert.
+type Options struct {
+	// Extensions enables the engine's bundled extensions - the diagram presets
+	// (mermaid, plantuml, d2, graphviz, wavedrom, abc, vega-lite, chart) plus
+	// details, spoiler, code-callouts, color and math. Diagram fences then
+	// render as hydration elements (`<pre class="plantuml">`, ...) for a
+	// client-side or build-step renderer; core Carve leaves them plain code.
+	Extensions bool
+
+	// Static produces self-contained HTML: interactive constructs are
+	// flattened and diagrams/math degrade to their source. It implies
+	// Extensions (that is what produces the constructs to flatten).
+	Static bool
+}
+
+// ConvertWithOptions is Convert with explicit engine options.
+func ConvertWithOptions(source string, opts Options) (Result, error) {
 	fm, body := splitFrontMatter(source)
 
-	html, err := carve.ToHTML(body)
+	carveOpts := carve.Options{Static: opts.Static}
+	if opts.Extensions || opts.Static {
+		// carve-go enables the full bundle for any non-empty slice.
+		carveOpts.Extensions = []string{"all"}
+	}
+	html, err := carve.ToHTMLOptions(body, carveOpts)
 	if err != nil {
 		return Result{}, fmt.Errorf("render carve body: %w", err)
 	}
