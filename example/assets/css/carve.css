@@ -1,0 +1,492 @@
+/*
+ * carve.css -- vendored from the canonical Carve theme (https://github.com/markup-carve/carve).
+ * These CSS custom properties mirror the VitePress defaults so the rules below
+ * work outside a VitePress site. Override any variable in your own stylesheet
+ * to adapt colors, fonts, and backgrounds to your theme.
+ *
+ * Dark-mode overrides are not included in this v1 vendor; add a
+ * @media (prefers-color-scheme: dark) block with your own values if needed.
+ *
+ * Rules are scoped to .carve-content; wrap the rendered Carve content in an
+ * element carrying that class (see the example layout) to apply them, instead
+ * of VitePress's .carve-render / .carve-playground.
+ */
+:root {
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-soft: #f6f6f7;
+  --vp-c-divider: #e2e2e3;
+  --vp-c-text-1: #213547;
+  --vp-c-text-2: #476582;
+  --vp-c-text-3: #90a4b7;
+  --vp-c-brand-1: #3451b2;
+  --vp-c-brand-soft: rgba(100, 108, 255, 0.14);
+  --vp-c-default-1: #3c3c43;
+  --vp-c-default-soft: rgba(142, 150, 170, 0.14);
+  --vp-c-green-1: #18794e;
+  --vp-c-green-soft: rgba(16, 185, 129, 0.14);
+  --vp-c-yellow-1: #915930;
+  --vp-c-yellow-soft: rgba(234, 179, 8, 0.14);
+  --vp-c-red-1: #b8272c;
+  --vp-c-red-soft: rgba(244, 63, 94, 0.14);
+  --vp-c-purple-1: #8e18aa;
+  --vp-c-purple-soft: rgba(159, 122, 234, 0.14);
+  --vp-c-note-1: #3451b2;
+  --vp-c-note-soft: rgba(100, 108, 255, 0.14);
+  --vp-code-block-bg: #f6f6f7;
+  --vp-font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --shiki-dark: initial;
+}
+
+.carve-content .admonition {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border-left: 4px solid var(--vp-c-default-1);
+  background: var(--vp-c-default-soft);
+}
+.carve-content .admonition > :first-child {
+  margin-top: 0;
+}
+.carve-content .admonition > :last-child {
+  margin-bottom: 0;
+}
+.carve-content .admonition-title {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.8rem;
+  margin-bottom: 0.4rem;
+}
+.carve-content .admonition.note,
+.carve-content .admonition.info {
+  border-left-color: var(--vp-c-note-1, var(--vp-c-brand-1));
+  background: var(--vp-c-note-soft, var(--vp-c-brand-soft));
+}
+.carve-content .admonition.tip,
+.carve-content .admonition.success {
+  border-left-color: var(--vp-c-green-1);
+  background: var(--vp-c-green-soft);
+}
+.carve-content .admonition.warning {
+  border-left-color: var(--vp-c-yellow-1);
+  background: var(--vp-c-yellow-soft);
+}
+.carve-content .admonition.danger {
+  border-left-color: var(--vp-c-red-1);
+  background: var(--vp-c-red-soft);
+}
+.carve-content .admonition.example {
+  border-left-color: var(--vp-c-purple-1);
+  background: var(--vp-c-purple-soft);
+}
+.carve-content .admonition.quote {
+  border-left-color: var(--vp-c-default-1);
+  background: var(--vp-c-default-soft);
+}
+
+/* Keyboard keys: a subtle keycap. */
+.carve-content kbd {
+  display: inline-block;
+  padding: 0.15em 0.45em;
+  font-family: var(--vp-font-family-mono, ui-monospace, monospace);
+  font-size: 0.82em;
+  line-height: 1.2;
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Mentions and tags: a flat, colored pill. */
+.carve-content .mention,
+.carve-content .tag {
+  display: inline-block;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  font-size: 0.9em;
+  font-weight: 500;
+  line-height: 1.4;
+  text-decoration: none;
+}
+.carve-content .mention strong {
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+  font-weight: 500;
+}
+.carve-content .tag strong {
+  color: var(--vp-c-green-1, var(--vp-c-brand-1));
+  background: var(--vp-c-green-soft, var(--vp-c-brand-soft));
+  font-weight: 500;
+}
+
+/* Figure caption (blockquote / image with `^ caption`). */
+.carve-content figure {
+  margin: 1rem 0;
+}
+.carve-content figcaption {
+  margin-top: 0.4rem;
+  color: var(--vp-c-text-2);
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+/* Table caption. */
+.carve-content table caption {
+  caption-side: bottom;
+  margin-top: 0.5rem;
+  color: var(--vp-c-text-2);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+/* Inline / display math (KaTeX not loaded — show the TeX legibly). */
+.carve-content .math {
+  font-family: var(--vp-font-family-mono, ui-monospace, monospace);
+  font-size: 0.95em;
+}
+.carve-content .math.display {
+  display: block;
+  text-align: center;
+  margin: 1rem 0;
+}
+
+/*
+ * Demo styling for a generic attributed div. Carve's `::: {#id .class}` (no
+ * admonition type) emits a plain <div class="…"> that carries no styling of
+ * its own — the author targets it with their own CSS. The feature demo uses
+ * `.highlight`, so style it here to show the hook actually working.
+ */
+.carve-content div.highlight {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--vp-c-brand-1);
+  border-radius: 8px;
+  background: var(--vp-c-brand-soft);
+}
+.carve-content div.highlight > :first-child {
+  margin-top: 0;
+}
+.carve-content div.highlight > :last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * Task lists. Carve emits a plain `<ul><li><input type="checkbox">…` with no
+ * wrapper class (unlike VitePress's own `.contains-task-list`), so style the
+ * checkbox items directly: drop the bullet and pull the checkbox into the
+ * marker gutter. Applies inside `.carve-content`.
+ */
+.carve-content li:has(> input[type='checkbox']) {
+  list-style: none;
+}
+.carve-content li > input[type='checkbox'] {
+  margin: 0 0.5em 0 -1.4em;
+  vertical-align: middle;
+}
+
+/*
+ * Playground output code blocks are highlighted client-side by Shiki with
+ * dual-theme output (each token carries a `--shiki-dark` CSS variable). In
+ * light mode the inline color applies; in dark mode switch to the dark
+ * palette. VitePress's own dark-Shiki rule only targets its
+ * `div[class*='language-']` wrapper, which the client-injected
+ * `<pre class="shiki">` doesn't have, so scope our own rule to the output.
+ */
+.dark .carve-content .shiki,
+.dark .carve-content .shiki span {
+  color: var(--shiki-dark) !important;
+}
+
+/*
+ * Give the injected Shiki blocks VitePress's code-block chrome (its themed
+ * background, padding, rounded corners, spacing, horizontal scroll). Without
+ * the `div[class*='language-']` wrapper VitePress styles, the bare `<pre>`
+ * would sit flush and blend into the page. Use VitePress's own code-block
+ * background (theme-aware) instead of Shiki's inline white/black so the boxes
+ * match the rest of the docs.
+ */
+.carve-content .shiki {
+  margin: 10px 0;
+  padding: 14px 18px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.8em;
+  line-height: 1.6;
+  background-color: var(--vp-code-block-bg) !important;
+}
+.carve-content .shiki code {
+  display: block;
+  width: fit-content;
+  min-width: 100%;
+  /* The token colors come from Shiki's inline styles, not the prose color. */
+  padding: 0;
+  background: transparent;
+}
+
+/*
+ * Disclosure summaries (the `details` extension / raw <details>) are
+ * clickable: Carve emits a bare <summary> without VitePress's custom-block
+ * chrome, so a browser shows the default arrow cursor. Restore the pointer
+ * cursor and a hover affordance.
+ */
+.carve-content summary {
+  cursor: pointer;
+}
+.carve-content summary:hover {
+  color: var(--vp-c-brand-1);
+}
+
+/*
+ * Display math (KaTeX `.katex-display`, from `$$…$$` and ` ```math ` blocks)
+ * can be wider than the output pane; KaTeX leaves it `overflow: visible`, which
+ * stretched the rendered pane. Let a wide equation scroll inside its own block
+ * instead, and let the pane shrink (min-width:0) so it never grows past its
+ * column.
+ */
+.carve-content {
+  min-width: 0;
+}
+.carve-content .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/* ---- Spoiler extension (Tier-3) ----
+   Inline `:spoiler[…]` blurs until clicked; block `::: spoiler` is a native
+   <details> collapse. Reveal JS lives in Playground.vue (inline only). */
+.carve-content span.spoiler {
+  filter: blur(0.3em);
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 0.15em;
+  background: rgba(127, 127, 127, 0.14);
+  -webkit-user-select: none;
+  user-select: none;
+  transition: filter 0.2s;
+}
+.carve-content span.spoiler.revealed {
+  filter: none;
+  background: transparent;
+  user-select: text;
+}
+.carve-content details.spoiler {
+  border: 1px solid var(--vp-c-divider);
+  border-left: 4px solid #e0af68;
+  border-radius: 8px;
+  padding: 2px 14px;
+  margin: 10px 0;
+}
+/* Tight vertical rhythm inside an open spoiler. */
+.carve-content details.spoiler[open] > summary {
+  margin-bottom: 4px;
+}
+.carve-content details.spoiler > :last-child {
+  margin-bottom: 0;
+}
+
+/* Blurred-panel spoiler: a generic `{.spoiler}` div whose body stays in place
+   but blurred until clicked. Its FIRST child is an always-visible title; the
+   rest is blurred. Reveal wiring (click/keyboard) is in Playground.vue. */
+.carve-content div.spoiler {
+  border: 1px solid var(--vp-c-divider);
+  border-left: 4px solid #e0af68;
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin: 10px 0;
+  cursor: pointer;
+}
+.carve-content div.spoiler > :first-child {
+  margin-top: 0;
+  color: #e0af68;
+  font-weight: 600;
+}
+.carve-content div.spoiler > :first-child::before {
+  content: '👁 ';
+}
+.carve-content div.spoiler > :not(:first-child) {
+  filter: blur(0.4em);
+  transition: filter 0.25s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.carve-content div.spoiler.revealed > :not(:first-child) {
+  filter: none;
+  user-select: text;
+}
+.carve-content div.spoiler > :last-child {
+  margin-bottom: 0;
+}
+.carve-content details.spoiler > summary {
+  cursor: pointer;
+  color: #e0af68;
+  font-weight: 600;
+  list-style: none;
+  /* Kill the inherited 16px content margin so the summary sits tight (esp. top). */
+  margin: 0;
+}
+.carve-content details.spoiler > summary::-webkit-details-marker {
+  display: none;
+}
+.carve-content details.spoiler > summary::before {
+  content: '👁 ';
+}
+.carve-content details.spoiler > summary::after {
+  content: ' (click to reveal)';
+  color: var(--vp-c-text-2);
+  font-weight: 400;
+  font-size: 0.85em;
+}
+.carve-content details.spoiler[open] > summary::after {
+  content: '';
+}
+
+/* Chart (FencedRender `chart` json preset) canvas sizing in the playground. */
+.carve-content div.chart {
+  max-width: 520px;
+  margin: 10px 0;
+}
+
+/* Carve heading permalinks (headingPermalinks extension): show the ¶ anchor
+   only when the heading is hovered or the anchor is focused, not always. */
+.carve-content .permalink {
+  opacity: 0;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.carve-content :is(h1, h2, h3, h4, h5, h6):hover .permalink,
+.carve-content .permalink:focus,
+.carve-content :is(h1, h2, h3, h4, h5, h6):hover .permalink,
+.carve-content .permalink:focus {
+  opacity: 1;
+}
+
+/* Editorial (critic) markup: {+ added +} -> <ins>, {- deleted -} -> <del>,
+   {~ old ~> new ~} -> <del><ins>, {# note #} -> <span class="critic-comment">.
+   Default <ins>/<del> get no color, and .critic-comment is unstyled, so add it. */
+.carve-content ins {
+  background: rgba(64, 180, 96, 0.2);
+  text-decoration: none;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.carve-content del {
+  background: rgba(220, 84, 84, 0.18);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.carve-content .critic-comment {
+  color: var(--vp-c-text-2);
+  font-style: italic;
+  border-bottom: 1px dotted var(--vp-c-text-3);
+}
+
+/* Code-block chrome (playground output): hover shows the language + copy icon
+   in the top-right corner. Decoration wired in Playground.vue. */
+.carve-content pre[data-pill] {
+  position: relative;
+}
+.carve-content .code-pill {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: 11px;
+  line-height: 1;
+}
+.carve-content pre[data-pill]:hover .code-pill,
+.carve-content .code-pill:focus-within {
+  opacity: 1;
+}
+.carve-content .code-pill-lang {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  max-width: 10rem;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-2);
+  font-family: var(--vp-font-family-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.carve-content .code-pill-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  cursor: pointer;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg);
+  border-radius: 6px;
+  color: var(--vp-c-text-2);
+}
+.carve-content .code-pill-copy:hover,
+.carve-content .code-pill-copy:focus-visible {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+}
+.carve-content .code-pill-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Code-group (codeGroup extension): CSS-only radio tabs. The render emits
+   all <input.code-group-radio>+<label> first, then the <div.code-group-panel>s,
+   so :checked ~ nth-of-type wires each tab to its label + panel. */
+/* `position: relative` so the visually-hidden radio is contained in the widget;
+   otherwise focusing it on tab click scrolls the page to wherever it landed. */
+.carve-content .code-group { margin: 12px 0; position: relative; }
+.carve-content .code-group-radio { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.carve-content .code-group-label {
+  display: inline-block; cursor: pointer; padding: 4px 12px; font-size: 13px;
+  color: var(--vp-c-text-2); border: 1px solid transparent; border-bottom: none;
+  border-radius: 6px 6px 0 0;
+}
+.carve-content .code-group-panel { display: none; border: 1px solid var(--vp-c-divider); border-radius: 0 6px 6px 6px; }
+.carve-content .code-group-panel > pre,
+.carve-content .code-group-panel > div[class*="language-"] { margin: 0; }
+.carve-content .code-group-radio:nth-of-type(1):checked ~ .code-group-label:nth-of-type(1) {
+  color: var(--vp-c-text-1); background: var(--vp-c-bg-soft); border-color: var(--vp-c-divider);
+}
+.carve-content .code-group-radio:nth-of-type(1):checked ~ .code-group-panel:nth-of-type(1) { display: block; }
+.carve-content .code-group-radio:nth-of-type(2):checked ~ .code-group-label:nth-of-type(2) {
+  color: var(--vp-c-text-1); background: var(--vp-c-bg-soft); border-color: var(--vp-c-divider);
+}
+.carve-content .code-group-radio:nth-of-type(2):checked ~ .code-group-panel:nth-of-type(2) { display: block; }
+.carve-content .code-group-radio:nth-of-type(3):checked ~ .code-group-label:nth-of-type(3) {
+  color: var(--vp-c-text-1); background: var(--vp-c-bg-soft); border-color: var(--vp-c-divider);
+}
+.carve-content .code-group-radio:nth-of-type(3):checked ~ .code-group-panel:nth-of-type(3) { display: block; }
+.carve-content .code-group-radio:nth-of-type(4):checked ~ .code-group-label:nth-of-type(4) {
+  color: var(--vp-c-text-1); background: var(--vp-c-bg-soft); border-color: var(--vp-c-divider);
+}
+.carve-content .code-group-radio:nth-of-type(4):checked ~ .code-group-panel:nth-of-type(4) { display: block; }
+.carve-content .code-group-radio:nth-of-type(5):checked ~ .code-group-label:nth-of-type(5) {
+  color: var(--vp-c-text-1); background: var(--vp-c-bg-soft); border-color: var(--vp-c-divider);
+}
+.carve-content .code-group-radio:nth-of-type(5):checked ~ .code-group-panel:nth-of-type(5) { display: block; }
+.carve-content .code-group-radio:nth-of-type(6):checked ~ .code-group-label:nth-of-type(6) {
+  color: var(--vp-c-text-1); background: var(--vp-c-bg-soft); border-color: var(--vp-c-divider);
+}
+.carve-content .code-group-radio:nth-of-type(6):checked ~ .code-group-panel:nth-of-type(6) { display: block; }
