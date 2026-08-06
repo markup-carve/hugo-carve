@@ -48,7 +48,12 @@ func TestSpecCorpus(t *testing.T) {
 		t.Fatalf("CARVE_SPEC_CORPUS=%s is not readable: %v", dir, err)
 	}
 
+	// Names only, and never anything else: engine-drift.yml compares two runs'
+	// lists with `comm`, so a key that varies with an error message would make
+	// the same document look like two different ones and manufacture a
+	// pin-only entry. Human-readable detail goes in `details`, keyed the same.
 	var mismatches []string
+	details := map[string]string{}
 	total := 0
 	// A corpus document opening with `---`, `+++` or `{` is indistinguishable
 	// from a front matter block, and splitting it is correct behavior for a
@@ -77,7 +82,8 @@ func TestSpecCorpus(t *testing.T) {
 		got, err := Convert(string(src))
 		if err != nil {
 			total++
-			mismatches = append(mismatches, base+": convert error: "+err.Error())
+			mismatches = append(mismatches, base)
+			details[base] = "convert error: " + err.Error()
 			continue
 		}
 		if got.FrontMatter != "" {
@@ -109,9 +115,17 @@ func TestSpecCorpus(t *testing.T) {
 	t.Logf("divergent-list=%s", strings.Join(mismatches, ","))
 
 	if len(mismatches) > tolerance {
+		reported := make([]string, 0, len(mismatches))
+		for _, name := range mismatches {
+			if detail, ok := details[name]; ok {
+				reported = append(reported, name+": "+detail)
+				continue
+			}
+			reported = append(reported, name)
+		}
 		t.Fatalf("%d of %d corpus documents render differently through Convert, over the tolerance of %d.\n"+
 			"The engine is two pins deep - go.mod pins carve-go, which embeds a wasm built from carve-rs -\n"+
 			"so the usual cause is a stale go.mod pin rather than anything in this package.\n%s",
-			len(mismatches), total, tolerance, strings.Join(mismatches, "\n"))
+			len(mismatches), total, tolerance, strings.Join(reported, "\n"))
 	}
 }
