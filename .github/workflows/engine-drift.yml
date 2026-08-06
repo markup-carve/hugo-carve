@@ -1,0 +1,189 @@
+name: Engine drift
+
+# This repo renders with an engine it never builds, two pins deep and both
+# invisible from here: go.mod pins a carve-go pseudo-version, and that carve-go
+# embeds a prebuilt `.wasm` compiled from some carve-rs commit. Neither moves on
+# its own, and until this file existed nothing here compared either to anything
+# (carve#735).
+#
+# THREE QUESTIONS, deliberately kept apart.
+#
+#   1. Where is the go.mod pin against carve-go `main`? A version string, and
+#      the cheap half of the answer.
+#
+#   2. What did that carve-go BUILD ITS ENGINE FROM? carve-go records it in
+#      `internal/wasm/REV` (markup-carve/carve-go#24) and, until this job, no
+#      consumer ever read it back. A recorded provenance nothing reads is not
+#      traceability - it is a comment. This resolves the pinned carve-go's REV
+#      against carve-rs `main` and reports the distance.
+#
+#   3. What does the pin COST, in documents? A commit distance is a proxy: 200
+#      carve-rs commits can change nothing and one can change a construct. So
+#      the corpus is driven through Convert twice - once with the pinned
+#      carve-go, once with carve-go `main` - and the DIFFERENCE between the two
+#      counts is the divergence this repository can actually fix.
+#
+# That difference is the gate, and it is the only thing here that fails. The
+# residual count - documents that diverge with carve-go `main` too - is
+# carve-go's embedded wasm trailing carve-rs, which is markup-carve/carve-go's
+# own corpus gate to answer and cannot be fixed from this repository. Failing on
+# it would put this job permanently red for someone else's lag, which is how a
+# job gets ignored.
+
+on:
+  schedule:
+    # 05:00 UTC daily, alongside the other drift runs in the org.
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  engine-pin:
+    name: The pin, and what it was built from
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out carve-go
+        uses: actions/checkout@v4
+        with:
+          repository: markup-carve/carve-go
+          path: carve-go
+          fetch-depth: 0
+
+      - name: Check out carve-rs
+        uses: actions/checkout@v4
+        with:
+          repository: markup-carve/carve-rs
+          path: carve-rs
+          fetch-depth: 0
+
+      - name: Compare the go.mod pin against carve-go main
+        run: |
+          set -euo pipefail
+          # Matches both go.mod spellings - a bare `require <mod> <ver>` line
+          # and an indented line inside a `require (...)` block. An awk keyed on
+          # $1 reads only the block form, and silently yields the empty string
+          # for the bare one this repo actually uses.
+          version="$(grep -oE 'github\.com/markup-carve/carve-go v[^ ]+' go.mod | head -1 | awk '{print $2}')"
+          if [ -z "${version}" ]; then
+            echo "::error::github.com/markup-carve/carve-go is not required by go.mod - this workflow is watching nothing"
+            exit 1
+          fi
+          echo "go.mod requires ${version}"
+
+          # A pseudo-version ends in -<12-hex>; a tagged release does not, and
+          # carve-go has never tagged one, so anything else here is a surprise
+          # worth failing on rather than guessing about.
+          rev="${version##*-}"
+          if ! printf '%s' "${rev}" | grep -qE '^[0-9a-f]{12}$'; then
+            echo "::error::${version} does not end in a 12-hex pseudo-version revision, so the commit it came from cannot be identified"
+            exit 1
+          fi
+          if ! git -C carve-go cat-file -e "${rev}^{commit}" 2>/dev/null; then
+            echo "::error::go.mod pins carve-go ${rev}, which is not a commit in markup-carve/carve-go"
+            exit 1
+          fi
+          if ! git -C carve-go merge-base --is-ancestor "${rev}" origin/main; then
+            echo "::error::carve-go ${rev} is not on main, so the engine came from an unmerged or rewritten branch"
+            exit 1
+          fi
+          behind="$(git -C carve-go rev-list --count "${rev}..origin/main")"
+          echo "carve-go pin: ${rev} ($(git -C carve-go log -1 --format=%s "${rev}"))"
+          echo "carve-go main is ${behind} commit(s) ahead"
+          if [ "${behind}" -gt 0 ]; then
+            echo "::warning::the carve-go pin is ${behind} commit(s) behind carve-go main"
+          fi
+          echo "CARVE_GO_REV=${rev}" >> "${GITHUB_ENV}"
+
+      - name: Read the engine revision the pinned carve-go recorded
+        run: |
+          set -euo pipefail
+          # carve-go writes internal/wasm/REV from build-wasm.sh so the embedded
+          # engine can be traced to a carve-rs commit. Nothing downstream ever
+          # read it. This is that reader.
+          engine="$(git -C carve-go show "${CARVE_GO_REV}:internal/wasm/REV" 2>/dev/null | tr -d '[:space:]' || true)"
+          if [ -z "${engine}" ]; then
+            echo "::error::carve-go ${CARVE_GO_REV} records no internal/wasm/REV, so what this repo renders with cannot be traced to a carve-rs commit"
+            exit 1
+          fi
+          if ! git -C carve-rs cat-file -e "${engine}^{commit}" 2>/dev/null; then
+            echo "::error::carve-go ${CARVE_GO_REV} records engine ${engine}, which is not a commit in markup-carve/carve-rs"
+            exit 1
+          fi
+          if ! git -C carve-rs merge-base --is-ancestor "${engine}" origin/main; then
+            echo "::error::engine ${engine} is not on carve-rs main, so the embedded wasm came from an unmerged or rewritten branch"
+            exit 1
+          fi
+          behind="$(git -C carve-rs rev-list --count "${engine}..origin/main")"
+          echo "embedded engine: carve-rs ${engine} ($(git -C carve-rs log -1 --format=%s "${engine}"))"
+          echo "carve-rs main is ${behind} commit(s) ahead"
+          if [ "${behind}" -gt 0 ]; then
+            echo "::warning::the engine this repo renders with is carve-rs ${engine}, ${behind} commit(s) behind carve-rs main - refreshing it is markup-carve/carve-go's build-wasm.sh, not a change here"
+          fi
+
+  corpus:
+    name: What the pin costs, in documents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Check out the corpus from carve main
+        uses: actions/checkout@v4
+        with:
+          repository: markup-carve/carve
+          path: carve-main
+
+      - name: Corpus through Convert, with the pinned carve-go
+        id: pinned
+        env:
+          CARVE_SPEC_CORPUS: ${{ github.workspace }}/carve-main/tests/corpus
+          # Report rather than fail: this run's verdict is decided below, by
+          # comparing it against the run with carve-go main.
+          CARVE_CORPUS_MAX_DIVERGENCE: 100000
+        run: |
+          set -euo pipefail
+          out="$(go test ./internal/convert/ -run TestSpecCorpus -v | tee /dev/stderr)"
+          printf '%s\n' "$out" | sed -n 's/.*divergent-list=//p' | tail -1 | tr ',' '\n' | sed '/^$/d' | sort > pinned-divergent.txt
+          printf 'divergent=%s\n' "$(printf '%s\n' "$out" | grep -oE 'divergent=[0-9]+' | tail -1 | cut -d= -f2)" >> "${GITHUB_OUTPUT}"
+          printf 'comparable=%s\n' "$(printf '%s\n' "$out" | grep -oE 'comparable=[0-9]+' | tail -1 | cut -d= -f2)" >> "${GITHUB_OUTPUT}"
+
+      - name: Corpus through Convert, with carve-go main
+        env:
+          CARVE_SPEC_CORPUS: ${{ github.workspace }}/carve-main/tests/corpus
+          CARVE_CORPUS_MAX_DIVERGENCE: 100000
+        run: |
+          set -euo pipefail
+          go get "github.com/markup-carve/carve-go@main"
+          echo "replaced with: $(grep -oE 'github\.com/markup-carve/carve-go v[^ ]+' go.mod | head -1 | awk '{print $2}')"
+          out="$(go test ./internal/convert/ -run TestSpecCorpus -v | tee /dev/stderr)"
+          printf '%s\n' "$out" | sed -n 's/.*divergent-list=//p' | tail -1 | tr ',' '\n' | sed '/^$/d' | sort > current-divergent.txt
+          current="$(printf '%s\n' "$out" | grep -oE 'divergent=[0-9]+' | tail -1 | cut -d= -f2)"
+          pinned='${{ steps.pinned.outputs.divergent }}'
+          comparable='${{ steps.pinned.outputs.comparable }}'
+
+          echo "pinned carve-go : ${pinned} of ${comparable} documents diverge"
+          echo "carve-go main   : ${current} of ${comparable} documents diverge"
+
+          if [ "${current}" -gt 0 ]; then
+            echo "::warning::${current} of ${comparable} documents diverge with carve-go main too - that is carve-go's embedded wasm trailing carve-rs, answered by markup-carve/carve-go's own corpus gate and not fixable here"
+          fi
+
+          # Set difference, not a subtraction. The two runs can diverge on the
+          # same NUMBER of documents and on different ones - a construct the
+          # pin gets right and main gets wrong, traded against one the other
+          # way - and subtracting the counts would report that swap as "the pin
+          # costs nothing", which is precisely the shape of check this whole
+          # workflow exists to stop shipping.
+          comm -23 pinned-divergent.txt current-divergent.txt > pin-only.txt
+          attributable="$(wc -l < pin-only.txt | tr -d ' ')"
+          if [ "${attributable}" -gt 0 ]; then
+            echo "documents the pin renders wrongly and carve-go main renders correctly:"
+            sed 's/^/  /' pin-only.txt
+            echo "::error::the go.mod pin renders ${attributable} documents wrongly that carve-go main renders correctly. Bump it: go get github.com/markup-carve/carve-go@main"
+            exit 1
+          fi
+          echo "the pin costs no documents against carve-go main"
