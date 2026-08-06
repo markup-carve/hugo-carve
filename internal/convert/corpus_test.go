@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -22,14 +23,24 @@ import (
 // A version distance cannot answer this. 200 carve-rs commits can change
 // nothing, and one can change a construct. This counts DOCUMENTS.
 //
-// The corpus path comes from CARVE_SPEC_CORPUS, matching carve-go. When unset
+// CARVE_SPEC_CORPUS gives the corpus directory, matching carve-go. When unset
 // the test skips, so `go test ./...` works in a plain checkout without the
-// spec; CI always sets it, and the guard below turns "the corpus wasn't really
-// there" into a failure rather than a pass.
+// spec. CARVE_CORPUS_MAX_DIVERGENCE is how many documents may diverge before
+// this fails; it defaults to 0, and engine-drift.yml sets it deliberately when
+// it runs this twice to separate the two lags (see that file).
 func TestSpecCorpus(t *testing.T) {
 	dir := os.Getenv("CARVE_SPEC_CORPUS")
 	if dir == "" {
-		t.Skip("CARVE_SPEC_CORPUS not set; see .github/workflows/ci.yml for the corpus job")
+		t.Skip("CARVE_SPEC_CORPUS not set; see .github/workflows/engine-drift.yml for the corpus job")
+	}
+
+	tolerance := 0
+	if raw := os.Getenv("CARVE_CORPUS_MAX_DIVERGENCE"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			t.Fatalf("CARVE_CORPUS_MAX_DIVERGENCE=%q is not a number", raw)
+		}
+		tolerance = parsed
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -85,14 +96,17 @@ func TestSpecCorpus(t *testing.T) {
 		t.Fatalf("only %d comparable corpus pairs found in %s; the corpus has 690 or more, so this is a wiring problem, not a clean run", total, dir)
 	}
 
-	t.Logf("%d of %d comparable corpus documents render identically (%d more opened with a front matter delimiter and were split rather than compared)",
-		total-len(mismatches), total, frontMatterClaimed)
+	// Machine-readable, because engine-drift.yml reads these back out of the
+	// `-v` log to compare two runs against each other.
+	t.Logf("comparable=%d", total)
+	t.Logf("divergent=%d", len(mismatches))
+	t.Logf("front-matter-claimed=%d", frontMatterClaimed)
 
 	sort.Strings(mismatches)
-	if len(mismatches) > 0 {
-		t.Fatalf("%d of %d corpus documents render differently through Convert.\n"+
+	if len(mismatches) > tolerance {
+		t.Fatalf("%d of %d corpus documents render differently through Convert, over the tolerance of %d.\n"+
 			"The engine is two pins deep - go.mod pins carve-go, which embeds a wasm built from carve-rs -\n"+
 			"so the usual cause is a stale go.mod pin rather than anything in this package.\n%s",
-			len(mismatches), total, strings.Join(mismatches, "\n"))
+			len(mismatches), total, tolerance, strings.Join(mismatches, "\n"))
 	}
 }
