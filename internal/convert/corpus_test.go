@@ -96,13 +96,18 @@ func TestSpecCorpus(t *testing.T) {
 		t.Fatalf("only %d comparable corpus pairs found in %s; the corpus has 690 or more, so this is a wiring problem, not a clean run", total, dir)
 	}
 
+	sort.Strings(mismatches)
+
 	// Machine-readable, because engine-drift.yml reads these back out of the
-	// `-v` log to compare two runs against each other.
+	// `-v` log to compare two runs against each other. The NAMES matter, not
+	// just the count: two runs can diverge on the same number of documents and
+	// on different ones, and subtracting the counts would report that as "the
+	// pin costs nothing".
 	t.Logf("comparable=%d", total)
 	t.Logf("divergent=%d", len(mismatches))
 	t.Logf("front-matter-claimed=%d", frontMatterClaimed)
+	t.Logf("divergent-list=%s", strings.Join(mismatches, ","))
 
-	sort.Strings(mismatches)
 	if len(mismatches) > tolerance {
 		t.Fatalf("%d of %d corpus documents render differently through Convert, over the tolerance of %d.\n"+
 			"The engine is two pins deep - go.mod pins carve-go, which embeds a wasm built from carve-rs -\n"+
