@@ -62,6 +62,11 @@ func TestSpecCorpus(t *testing.T) {
 	// would put 35 documents of ambiguity into a number that is supposed to
 	// mean "the engine disagrees with the spec".
 	frontMatterClaimed := 0
+	// Every .crv that has an .html beside it, which is the POPULATION this run
+	// read. `total` is only the comparable part of it, so `total` alone cannot
+	// answer "was the whole corpus here" - a checkout missing 200 documents and
+	// a corpus where 200 documents claimed front matter look identical from it.
+	paired := 0
 
 	for _, e := range entries {
 		name := e.Name()
@@ -78,6 +83,7 @@ func TestSpecCorpus(t *testing.T) {
 			// A .crv with no .html pair is not an input to this comparison.
 			continue
 		}
+		paired++
 
 		got, err := Convert(string(src))
 		if err != nil {
@@ -98,9 +104,16 @@ func TestSpecCorpus(t *testing.T) {
 
 	// Without this, an empty or wrong directory would report zero mismatches
 	// and pass - the exact shape of check that let the stale artifact through.
-	if total < 400 {
-		t.Fatalf("only %d comparable corpus pairs found in %s; the corpus has 690 or more, so this is a wiring problem, not a clean run", total, dir)
-	}
+	// It used to be `total < 400` against a corpus of 1131, which passed over a
+	// corpus missing two thirds of its documents; see
+	// corpus_population_test.go for what replaced it and why the reference is
+	// the spec's example pages rather than a number recorded here.
+	//
+	// Checked against `paired` rather than `total`, because `total` is what
+	// SURVIVED the front matter split and the spec's pages declare what was
+	// there to begin with. Asserting on `total` would make a document newly
+	// claiming front matter look like a missing document.
+	requireWholeCorpus(t, dir, paired, "corpus pairs read")
 
 	sort.Strings(mismatches)
 
