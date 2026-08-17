@@ -24,5 +24,51 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # No CARVE_SPEC_CORPUS here, deliberately. This job asserts that the
+      # package builds and its hand-written expectations hold on a plain
+      # checkout with no spec beside it, which is also how a contributor runs
+      # it. The corpus needs a second repository and gets its own job below.
+      #
+      # That split is what made TestSpecCorpus dead: this was the ONLY job, it
+      # never set the variable, and the test skipped on every push and every
+      # pull request since it was written (hugo-carve#11). The skip is still a
+      # skip here - what stops it going quiet again is
+      # TestTheCorpusJobRunsEveryCorpusGatedTest, which runs in THIS job,
+      # reads ci.yml, and fails if no job wires the variable up or if the
+      # command that does cannot reach every corpus-gated test in the package.
       - name: Test
         run: go test ./...
+
+  # The corpus, in the blocking path.
+  #
+  # Everything else in internal/convert asserts hand-written expectations, and
+  # a stale engine satisfies those exactly as well as a current one. This is the
+  # only check in the repository that can tell one from the other, so a green
+  # build-test without it proves the package compiles and nothing about what it
+  # renders.
+  #
+  # It gates on the DIFFERENCE between the pinned carve-go and carve-go main,
+  # not on the absolute count, because only the difference is something a pull
+  # request here can act on. See scripts/corpus-drift.sh for why, and for what
+  # the residual means.
+  corpus:
+    name: What the pin costs, in documents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Check out the corpus from carve main
+        uses: actions/checkout@v4
+        with:
+          repository: markup-carve/carve
+          path: carve-main
+
+      - name: The corpus, through the pin and through carve-go main
+        env:
+          CARVE_SPEC_CORPUS: ${{ github.workspace }}/carve-main/tests/corpus
+        run: scripts/corpus-drift.sh
