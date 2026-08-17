@@ -32,8 +32,31 @@ name: Engine drift
 
 on:
   schedule:
-    # 05:00 UTC daily, alongside the other drift runs in the org.
-    - cron: "0 5 * * *"
+    # 05:25 UTC daily, alongside the other drift runs in the org.
+    #
+    # THE MINUTE IS NOT THE POINT; REWRITING THIS LINE IS. Between landing on
+    # 2026-08-06 and 2026-08-17 this workflow produced exactly one run, and that
+    # run was the workflow_dispatch fired when the file merged. Not one
+    # scheduled run in eleven days, while the pin it would have caught cost 166
+    # documents (hugo-carve#7).
+    #
+    # The cause was NOT determined. Everything checkable is normal and matches
+    # the siblings whose crons do fire: the workflow reports state=active, the
+    # repository is not a fork and not archived, Actions are enabled with
+    # allowed_actions=all, the file is on the default branch, it is plain ASCII
+    # with no BOM, and workflow_dispatch on this same `on:` block works. Twelve
+    # other repositories in the org carry the byte-identical expression
+    # `0 5 * * *` and every one of them fires daily, so the expression and the
+    # contended top-of-the-hour slot are ruled out as the cause too.
+    #
+    # What is left is the registration itself, and the only lever this
+    # repository has over it is to commit a change to the cron setting, which is
+    # what registers a schedule in the first place. So this line is rewritten,
+    # deliberately, and off the hour boundary while it is being touched since
+    # GitHub drops the most heavily contended minutes first. Treat it as the
+    # available lever rather than a diagnosis: the next scheduled window is the
+    # test, and if it stays silent the answer is not in this file.
+    - cron: "25 5 * * *"
   workflow_dispatch:
 
 jobs:
