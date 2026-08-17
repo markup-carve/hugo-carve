@@ -160,53 +160,15 @@ jobs:
           repository: markup-carve/carve
           path: carve-main
 
-      - name: Corpus through Convert, with the pinned carve-go
-        id: pinned
+      # One script, two callers. ci.yml runs this same comparison on push and
+      # pull_request, where it blocks a merge; this scheduled run catches the
+      # case that has no push here at all - carve-go publishes a new wasm and
+      # this pin becomes costly without a single commit in this repository.
+      #
+      # It used to be two inline steps handing a count between them through
+      # GITHUB_OUTPUT. Copying that into ci.yml would have been a second
+      # spelling of one rule, and the two would drift.
+      - name: The corpus, through the pin and through carve-go main
         env:
           CARVE_SPEC_CORPUS: ${{ github.workspace }}/carve-main/tests/corpus
-          # Report rather than fail: this run's verdict is decided below, by
-          # comparing it against the run with carve-go main.
-          CARVE_CORPUS_MAX_DIVERGENCE: 100000
-        run: |
-          set -euo pipefail
-          out="$(go test ./internal/convert/ -run TestSpecCorpus -v | tee /dev/stderr)"
-          printf '%s\n' "$out" | sed -n 's/.*divergent-list=//p' | tail -1 | tr ',' '\n' | sed '/^$/d' | sort > pinned-divergent.txt
-          printf 'divergent=%s\n' "$(printf '%s\n' "$out" | grep -oE 'divergent=[0-9]+' | tail -1 | cut -d= -f2)" >> "${GITHUB_OUTPUT}"
-          printf 'comparable=%s\n' "$(printf '%s\n' "$out" | grep -oE 'comparable=[0-9]+' | tail -1 | cut -d= -f2)" >> "${GITHUB_OUTPUT}"
-
-      - name: Corpus through Convert, with carve-go main
-        env:
-          CARVE_SPEC_CORPUS: ${{ github.workspace }}/carve-main/tests/corpus
-          CARVE_CORPUS_MAX_DIVERGENCE: 100000
-        run: |
-          set -euo pipefail
-          go get "github.com/markup-carve/carve-go@main"
-          echo "replaced with: $(grep -oE 'github\.com/markup-carve/carve-go v[^ ]+' go.mod | head -1 | awk '{print $2}')"
-          out="$(go test ./internal/convert/ -run TestSpecCorpus -v | tee /dev/stderr)"
-          printf '%s\n' "$out" | sed -n 's/.*divergent-list=//p' | tail -1 | tr ',' '\n' | sed '/^$/d' | sort > current-divergent.txt
-          current="$(printf '%s\n' "$out" | grep -oE 'divergent=[0-9]+' | tail -1 | cut -d= -f2)"
-          pinned='${{ steps.pinned.outputs.divergent }}'
-          comparable='${{ steps.pinned.outputs.comparable }}'
-
-          echo "pinned carve-go : ${pinned} of ${comparable} documents diverge"
-          echo "carve-go main   : ${current} of ${comparable} documents diverge"
-
-          if [ "${current}" -gt 0 ]; then
-            echo "::warning::${current} of ${comparable} documents diverge with carve-go main too - that is carve-go's embedded wasm trailing carve-rs, answered by markup-carve/carve-go's own corpus gate and not fixable here"
-          fi
-
-          # Set difference, not a subtraction. The two runs can diverge on the
-          # same NUMBER of documents and on different ones - a construct the
-          # pin gets right and main gets wrong, traded against one the other
-          # way - and subtracting the counts would report that swap as "the pin
-          # costs nothing", which is precisely the shape of check this whole
-          # workflow exists to stop shipping.
-          comm -23 pinned-divergent.txt current-divergent.txt > pin-only.txt
-          attributable="$(wc -l < pin-only.txt | tr -d ' ')"
-          if [ "${attributable}" -gt 0 ]; then
-            echo "documents the pin renders wrongly and carve-go main renders correctly:"
-            sed 's/^/  /' pin-only.txt
-            echo "::error::the go.mod pin renders ${attributable} documents wrongly that carve-go main renders correctly. Bump it: go get github.com/markup-carve/carve-go@main"
-            exit 1
-          fi
-          echo "the pin costs no documents against carve-go main"
+        run: scripts/corpus-drift.sh
