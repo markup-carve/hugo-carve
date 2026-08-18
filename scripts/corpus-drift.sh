@@ -91,6 +91,24 @@ measure() {
     fi
 }
 
+# What THIS REPOSITORY does to a document, before anything about the pin.
+#
+# The comparison below is a difference between two runs that both go through
+# Convert, so a defect in this package cancels out of it exactly: both runs
+# render the same document wrongly, the set difference is empty, and the verdict
+# at the bottom is "the pin costs no documents" while the damage is attributed
+# to carve-go's wasm trailing carve-rs. Measured, not supposed - a one-line
+# change to ConvertWithOptions put 873 of 1190 documents wrong and left this
+# script exiting 0 with a warning, alongside a green `go test ./...`.
+#
+# So this runs first, and it is not a second conformance run: it compares
+# Convert against the SAME linked engine, which makes it immune to engine lag
+# and sensitive only to this package. If this repository is mangling documents,
+# what the pin costs is not yet the interesting question.
+echo "== what this repository does to a document, against the engine it holds =="
+go test ./internal/convert/ -run TestConvertAddsNothingToTheEngine -v -count=1
+
+echo
 echo "== the corpus through Convert, with the go.mod pin =="
 echo "go.mod requires $(grep -oE 'github\.com/markup-carve/carve-go v[^ ]+' go.mod | head -1 | awk '{print $2}')"
 measure pinned
