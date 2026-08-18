@@ -1,5 +1,5 @@
-github.com/markup-carve/carve-go v0.1.1-0.20260817145905-8cc2875f73df h1:IEcdK91640JIF1RCEgOyleilQgoK2bfBJVPdTNcsZzk=
-github.com/markup-carve/carve-go v0.1.1-0.20260817145905-8cc2875f73df/go.mod h1:X+Un6Q0ALNQLzXA/wa2hZEHwqHzNT39Zlf1+GAxOOZw=
+github.com/markup-carve/carve-go v0.1.1-0.20260818033356-ee3f3207a83e h1:VyF0ASWb6tBtTBt2WlqOOhcwV55BvRHzDSO+RhguW78=
+github.com/markup-carve/carve-go v0.1.1-0.20260818033356-ee3f3207a83e/go.mod h1:X+Un6Q0ALNQLzXA/wa2hZEHwqHzNT39Zlf1+GAxOOZw=
 github.com/tetratelabs/wazero v1.12.0 h1:DuWcpNu/FzgEXgGBDp8J1Spc+CWOvvtvVyjKlaZopYU=
 github.com/tetratelabs/wazero v1.12.0/go.mod h1:LvKtzl2RqO4gyF27BiXU+nKAjcV8f38U+kP/q2vgxh0=
 golang.org/x/sys v0.44.0 h1:ildZl3J4uzeKP07r2F++Op7E9B29JRUy+a27EibtBTQ=
