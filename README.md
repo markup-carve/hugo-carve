@@ -101,6 +101,9 @@ Converts *.crv files into Hugo HTML content pages.
         output directory (default: in place, next to the source)
   -quiet
         suppress per-file log output
+  -safe
+        escape raw HTML (=html blocks and {=html} spans) instead of emitting
+        it; set this for content the site did not author
   -static
         self-contained static HTML: flatten interactive constructs and degrade
         diagrams/math to source (implies -extensions)
@@ -123,12 +126,85 @@ Converts *.crv files into Hugo HTML content pages.
   Graphviz/D2 offline via [`@markup-carve/carve-grammars`](https://github.com/markup-carve/carve-grammars)
   WASM helpers, PlantUML via a Kroki server, Mermaid via mermaid.js. Without the
   flag, diagram fences stay plain code blocks.
+- `--safe` escapes raw HTML instead of emitting it. Off by default. See
+  [Raw HTML and `--safe`](#raw-html-and---safe).
 - `--static` renders self-contained HTML: interactive constructs are flattened
   and diagrams/math degrade to their source. Implies `--extensions`. (carve-go
   has no build-time image renderer over the WASI boundary, so static mode
   degrades diagrams to source rather than embedding an image.)
 - `--symbols FILE` and `--symbol NAME=VALUE` supply the symbol map that decides
   what `:name:` renders as. See [Symbols](#symbols).
+
+`hugo-carve` takes flags and nothing else. An operand is refused with a message
+rather than ignored, because Go's flag parsing stops at the first non-flag
+argument: `hugo-carve content --safe` would otherwise read `content` as an
+operand, never apply `--safe`, and exit 0 having passed raw HTML through.
+
+## Raw HTML and `--safe`
+
+Carve renders a `=html` block and a `` `...`{=html} `` span verbatim, by
+design - that is what raw passthrough is for. `--safe` escapes them instead, so
+they reach the page as visible text:
+
+````
+Before.
+
+```=html
+<div class="x"><script>alert(1)</script></div>
+```
+
+Inline: `<b>bold</b>`{=html} tail.
+````
+
+Without `--safe` (the default):
+
+```html
+<p>Before.</p>
+<div class="x"><script>alert(1)</script></div>
+<p>Inline: <b>bold</b> tail.</p>
+```
+
+With `--safe`:
+
+```html
+<p>Before.</p>
+&lt;div class="x"&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;/div&gt;
+<p>Inline: &lt;b&gt;bold&lt;/b&gt; tail.</p>
+```
+
+**Default: off.** A site that adds nothing to its build command renders exactly
+what it rendered before this flag existed. Turn it on for any tree whose pages
+can come from outside the site's own authors - a docs site taking
+contributions, or any build where a page can arrive in a pull request:
+
+```bash
+hugo-carve --content content --safe && hugo
+```
+
+### What `--safe` does and does not cover
+
+It covers raw HTML passthrough, and that is the whole of it - because that is
+the whole of what needs a switch. Carve's hardening is **always on** and is not
+what this flag controls:
+
+| | without `--safe` | with `--safe` |
+|---|---|---|
+| `=html` block, `{=html}` span | emitted verbatim | escaped to text |
+| `javascript:` link destination | already blanked | blanked |
+| event-handler attribute (`onclick=`) | already dropped | dropped |
+| bidi override characters (Trojan Source) | already removed | removed |
+| a symbol value from `--symbol` / `--symbols` | inserted raw | **inserted raw** |
+
+That last row is the one to read twice. `--safe` is a statement about the
+**document**; a symbol value is **site configuration**, so it is substituted
+unescaped either way. `--safe` is not a license to build a symbol map out of
+page content - see the security note under [Symbols](#symbols).
+
+Two further limits worth stating plainly. `--safe` is a rendering option, not a
+sandbox: it says nothing about what your Hugo templates, shortcodes or theme
+put on the page around the converted body. And it applies to what `hugo-carve`
+converts, so a `.html` file already sitting in `content/` is passed through by
+Hugo untouched, whatever this flag says.
 
 ## Symbols
 

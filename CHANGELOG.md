@@ -16,9 +16,16 @@ so engine pin moves get an entry of their own.
   `--symbol NAME=VALUE` on the command line (both repeatable, merged left to
   right). Values are substituted raw, so the map is site configuration only -
   see the security note in the README. (#16)
+- `--safe` / `convert.Options.Safe`, which escapes raw HTML (`=html` blocks and
+  `{=html}` spans) instead of emitting it, so a site can render pages it did
+  not author. Off by default, which is the existing behavior. (#18)
 
 ### Changed
 
+- An unexpected command line operand is now refused instead of ignored.
+  `hugo-carve` takes flags only, and Go's flag parsing stops at the first
+  non-flag argument, so `hugo-carve content --safe` used to drop `--safe`
+  silently and exit 0. (#18)
 - The `carve-go` pin moves to `v0.1.2-0.20260821023146-73f58ce7cef1`, which is
   the first revision carrying `Options.Symbols`.
 
