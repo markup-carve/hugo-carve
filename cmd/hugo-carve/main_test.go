@@ -235,3 +235,114 @@ func write(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+// safePageSrc is one page carrying a raw HTML block, so a test can tell from
+// the written file whether --safe reached the engine.
+const safePageSrc = "+++\ntitle = \"S\"\n+++\n\n" +
+	"```=html\n<div class=\"x\"><script>alert(1)</script></div>\n```\n\nAnd a [link](https://example.com/).\n"
+
+// TestRun_SafeFlagReachesTheRenderedPage is the end-to-end statement for the
+// flag: registered, parsed and handed to the converter, with the escaping
+// visible in the file Hugo will read. The unit tests in internal/convert would
+// all pass with the flag never wired into run at all.
+func TestRun_SafeFlagReachesTheRenderedPage(t *testing.T) {
+	content, devNull := safeFixture(t)
+
+	if err := run([]string{"--content", content, "--safe", "--quiet"}, devNull, devNull); err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	out := readPage(t, filepath.Join(content, "page.html"))
+	if strings.Contains(out, "<script>") {
+		t.Errorf("--safe should not let a live script tag reach the page, got:\n%s", out)
+	}
+	if !strings.Contains(out, "&lt;script&gt;") {
+		t.Errorf("--safe should escape the raw block, got:\n%s", out)
+	}
+	if !strings.Contains(out, "<a href=\"https://example.com/\">") {
+		t.Errorf("--safe should leave ordinary markup alone, got:\n%s", out)
+	}
+	if !strings.HasPrefix(out, "+++\n") {
+		t.Errorf("front matter should still lead the page, got:\n%s", out)
+	}
+}
+
+// TestRun_WithoutSafeFlagRawHTMLStillPassesThrough is the other half: the
+// default is what it has always been, so an existing site sees no change.
+func TestRun_WithoutSafeFlagRawHTMLStillPassesThrough(t *testing.T) {
+	content, devNull := safeFixture(t)
+
+	if err := run([]string{"--content", content, "--quiet"}, devNull, devNull); err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	out := readPage(t, filepath.Join(content, "page.html"))
+	if !strings.Contains(out, "<div class=\"x\"><script>alert(1)</script></div>") {
+		t.Errorf("without --safe raw HTML should still pass through, got:\n%s", out)
+	}
+}
+
+// TestRun_RefusesAStrayOperand covers the way this flag could be switched off
+// without anyone noticing. Go's flag package stops parsing at the first
+// non-flag argument, so `hugo-carve content --safe` would read "content" as an
+// operand and never see --safe: the site builds, exit status is 0, raw HTML
+// goes straight through, and nothing says why. This command takes no operands,
+// so refusing one turns that silence into a message.
+func TestRun_RefusesAStrayOperand(t *testing.T) {
+	content, devNull := safeFixture(t)
+
+	for _, args := range [][]string{
+		{content, "--safe", "--quiet"},
+		{"--content", content, "extra", "--safe", "--quiet"},
+	} {
+		err := run(args, devNull, devNull)
+		if err == nil {
+			t.Fatalf("expected run to refuse the stray operand in %v", args)
+		}
+		if !strings.Contains(err.Error(), "unexpected argument") {
+			t.Errorf("error should name the stray argument, got: %v", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(content, "page.html")); statErr == nil {
+			t.Errorf("nothing should have been converted for %v", args)
+		}
+	}
+}
+
+// TestRun_RejectsANonBooleanSafeValue pins that a value the flag cannot read
+// stops the run instead of falling back to off. The flag package does this
+// itself; the case is here so a later change to a different flag shape has to
+// keep doing it.
+func TestRun_RejectsANonBooleanSafeValue(t *testing.T) {
+	content, devNull := safeFixture(t)
+
+	if err := run([]string{"--content", content, "--safe=maybe", "--quiet"}, devNull, devNull); err == nil {
+		t.Fatal("expected run to refuse a non-boolean --safe value")
+	}
+	if _, statErr := os.Stat(filepath.Join(content, "page.html")); statErr == nil {
+		t.Error("nothing should have been converted when --safe cannot be read")
+	}
+}
+
+// safeFixture builds a one-page content tree and a writer to discard logs.
+func safeFixture(t *testing.T) (content string, devNull *os.File) {
+	t.Helper()
+	dir := t.TempDir()
+	content = filepath.Join(dir, "content")
+	if err := os.MkdirAll(content, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(content, "page.crv"), safePageSrc)
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { devNull.Close() })
+	return content, devNull
+}
+
+func readPage(t *testing.T, path string) string {
+	t.Helper()
+	blob, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("converted page: %v", err)
+	}
+	return string(blob)
+}

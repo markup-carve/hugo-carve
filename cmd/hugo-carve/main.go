@@ -54,6 +54,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	quiet := fs.Bool("quiet", false, "suppress per-file log output")
 	extensions := fs.Bool("extensions", false, "enable the bundled extensions (diagram presets - mermaid, plantuml, d2, graphviz, ... - plus details, spoiler, code-callouts, color, math)")
 	static := fs.Bool("static", false, "self-contained static HTML: flatten interactive constructs and degrade diagrams/math to source (implies -extensions)")
+	safe := fs.Bool("safe", false, "escape raw HTML (=html blocks and {=html} spans) instead of emitting it; set this for content the site did not author")
 	var symbolFiles repeatable
 	fs.Var(&symbolFiles, "symbols", "path to a JSON `file` mapping a symbol name to what :name: renders as (repeatable; merged left to right)")
 	var symbolPairs repeatable
@@ -65,6 +66,15 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	// This command takes flags and nothing else, so an operand is always a
+	// mistake - and a silent one, because Go's flag package STOPS parsing at
+	// the first non-flag argument. `hugo-carve content --safe` would otherwise
+	// read "content" as a stray operand, never apply --safe, and exit 0 having
+	// passed raw HTML straight through. A security switch that a typo can
+	// disable without a word is worse than no switch, so say so instead.
+	if fs.NArg() > 0 {
+		return fmt.Errorf("unexpected argument %q: hugo-carve takes flags only (did you mean --content %s?); any flag after it was ignored", fs.Arg(0), fs.Arg(0))
 	}
 
 	symbols, err := symbolMap(symbolFiles, symbolPairs)
@@ -79,6 +89,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		quiet:      *quiet,
 		extensions: *extensions,
 		static:     *static,
+		safe:       *safe,
 		symbols:    symbols,
 		log:        stdout,
 	}
@@ -92,6 +103,7 @@ type converter struct {
 	quiet      bool
 	extensions bool
 	static     bool
+	safe       bool
 	symbols    map[string]string
 	log        *os.File
 }
@@ -248,6 +260,7 @@ func (c *converter) convertFile(src string) error {
 	res, err := convert.ConvertWithOptions(string(srcBytes), convert.Options{
 		Extensions: c.extensions,
 		Static:     c.static,
+		Safe:       c.safe,
 		Symbols:    c.symbols,
 	})
 	if err != nil {

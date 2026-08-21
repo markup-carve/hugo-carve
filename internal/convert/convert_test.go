@@ -400,3 +400,116 @@ func TestConvertWithOptions_SymbolsReachTheEngineUnchanged(t *testing.T) {
 			got.BodyHTML, strings.TrimRight(want, "\n"))
 	}
 }
+
+// rawHTMLSrc carries every construct Safe is supposed to reach (a `=html`
+// fenced block and a `{=html}` inline span) alongside constructs it is NOT
+// supposed to reach, so a test that passed by escaping the whole document
+// would fail here rather than look green.
+const rawHTMLSrc = "Before.\n\n" +
+	"```=html\n<div class=\"x\"><script>alert(1)</script></div>\n```\n\n" +
+	"Inline: `<b>bold</b>`{=html} tail.\n\n" +
+	"A [link](https://example.com/) and an image ![a](x.png).\n"
+
+// TestConvertWithOptions_SafeEscapesRawHTML is the point of the option: with
+// Safe set, neither the raw block nor the raw span reaches the page as live
+// markup.
+func TestConvertWithOptions_SafeEscapesRawHTML(t *testing.T) {
+	res, err := ConvertWithOptions(rawHTMLSrc, Options{Safe: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	for _, live := range []string{"<script>", "<div class=\"x\">", "<b>bold</b>"} {
+		if strings.Contains(res.BodyHTML, live) {
+			t.Errorf("Safe must not emit %q, got:\n%s", live, res.BodyHTML)
+		}
+	}
+	for _, escaped := range []string{"&lt;script&gt;", "&lt;b&gt;bold&lt;/b&gt;"} {
+		if !strings.Contains(res.BodyHTML, escaped) {
+			t.Errorf("Safe should escape raw HTML into %q, got:\n%s", escaped, res.BodyHTML)
+		}
+	}
+}
+
+// TestConvertWithOptions_SafeLeavesEverythingElseAlone is the guard against
+// the assertion above passing for the wrong reason. Safe escapes raw HTML; it
+// is not a mode that escapes the document, so ordinary constructs still render
+// as markup.
+func TestConvertWithOptions_SafeLeavesEverythingElseAlone(t *testing.T) {
+	res, err := ConvertWithOptions(rawHTMLSrc, Options{Safe: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	for _, want := range []string{"<p>Before.</p>", "<a href=\"https://example.com/\">link</a>", "<img src=\"x.png\""} {
+		if !strings.Contains(res.BodyHTML, want) {
+			t.Errorf("Safe should leave %q intact, got:\n%s", want, res.BodyHTML)
+		}
+	}
+}
+
+// TestConvertWithOptions_SafeOffIsUnchanged pins the default byte for byte. An
+// additive option that quietly changed the output every existing site already
+// gets would be a breaking change wearing a feature's clothes.
+func TestConvertWithOptions_SafeOffIsUnchanged(t *testing.T) {
+	const src = "+++\ntitle = \"S\"\n+++\n\n" +
+		"```=html\n<div class=\"x\">raw</div>\n```\n\nAnd *bold*.\n"
+
+	base, err := Convert(src)
+	if err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+	if !strings.Contains(base.BodyHTML, "<div class=\"x\">raw</div>") {
+		t.Fatalf("without Safe, raw HTML should pass through, got:\n%s", base.BodyHTML)
+	}
+
+	for _, tc := range []struct {
+		name string
+		opts Options
+	}{
+		{"zero value", Options{}},
+		{"explicitly off", Options{Safe: false}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ConvertWithOptions(src, tc.opts)
+			if err != nil {
+				t.Fatalf("ConvertWithOptions error: %v", err)
+			}
+			if got.Output != base.Output {
+				t.Errorf("output differs from the no-option render:\n got: %q\nwant: %q", got.Output, base.Output)
+			}
+		})
+	}
+}
+
+// TestConvertWithOptions_SafeComposesWithTheOtherOptions pins that Safe is
+// independent rather than mutually exclusive: it still escapes when static
+// mode and the extensions are also on, which is the combination a hardened
+// site would actually run.
+func TestConvertWithOptions_SafeComposesWithTheOtherOptions(t *testing.T) {
+	res, err := ConvertWithOptions(rawHTMLSrc, Options{Safe: true, Static: true, Extensions: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	if strings.Contains(res.BodyHTML, "<script>") {
+		t.Errorf("Safe must hold alongside Static and Extensions, got:\n%s", res.BodyHTML)
+	}
+}
+
+// TestConvertWithOptions_SafeDoesNotConstrainSymbols pins the boundary the
+// README draws, because it is the one a reader is most likely to get wrong:
+// Safe governs raw HTML in the DOCUMENT, and a symbol value is processor
+// configuration, so it is still substituted raw. If the engine ever changed
+// that, the README's security note would need rewriting rather than quietly
+// becoming over-cautious - so this test exists to notice.
+func TestConvertWithOptions_SafeDoesNotConstrainSymbols(t *testing.T) {
+	const raw = "<img src=x onerror=alert(1)>"
+	res, err := ConvertWithOptions("Logo :logo: here\n", Options{
+		Safe:    true,
+		Symbols: map[string]string{"logo": raw},
+	})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	if !strings.Contains(res.BodyHTML, raw) {
+		t.Errorf("a symbol value is trusted configuration and stays raw under Safe, got:\n%s", res.BodyHTML)
+	}
+}

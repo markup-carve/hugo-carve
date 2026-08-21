@@ -61,6 +61,29 @@ type Options struct {
 	// Extensions (that is what produces the constructs to flatten).
 	Static bool
 
+	// Safe escapes raw HTML instead of emitting it: a `=html` fenced block
+	// and a `{=html}` inline span both render as visible, escaped text. It is
+	// off by default, which is the behavior this package has always had.
+	//
+	// It covers raw passthrough and nothing else, because nothing else needs
+	// covering: Carve's normative hardening is always on, so a dangerous URL
+	// scheme is blanked, an event-handler attribute is dropped and the bidi
+	// override characters behind Trojan Source are removed whether Safe is set
+	// or not. Raw passthrough is the deliberate exception - a `=html` block
+	// renders verbatim by design - so it is the one thing a document you did
+	// not author has to be able to switch off.
+	//
+	// Safe is a statement about the DOCUMENT, not about this package's
+	// configuration. In particular it does NOT constrain Symbols: a symbol
+	// value is substituted raw with Safe on exactly as it is with Safe off,
+	// because the map is processor configuration rather than page content.
+	// See the security note on Symbols.
+	//
+	// Set it for any tree whose pages can come from outside the site's own
+	// authors - a docs site taking contributions, or any build where a page
+	// can arrive in a pull request.
+	Safe bool
+
 	// Symbols maps a shortcode name to the text `:NAME:` renders as. Carve
 	// parses `:name:` in its core - no extension needed - but what a name
 	// renders as is a render option, so with no map a shortcode renders as
@@ -89,7 +112,7 @@ type Options struct {
 func ConvertWithOptions(source string, opts Options) (Result, error) {
 	fm, body := splitFrontMatter(source)
 
-	carveOpts := carve.Options{Static: opts.Static, Symbols: opts.Symbols}
+	carveOpts := carve.Options{Static: opts.Static, Safe: opts.Safe, Symbols: opts.Symbols}
 	if opts.Extensions || opts.Static {
 		// carve-go enables the full bundle for any non-empty slice.
 		carveOpts.Extensions = []string{"all"}
