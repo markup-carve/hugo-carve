@@ -60,13 +60,36 @@ type Options struct {
 	// flattened and diagrams/math degrade to their source. It implies
 	// Extensions (that is what produces the constructs to flatten).
 	Static bool
+
+	// Symbols maps a shortcode name to the text `:NAME:` renders as. Carve
+	// parses `:name:` in its core - no extension needed - but what a name
+	// renders as is a render option, so with no map a shortcode renders as
+	// its own source text. A name the map does not carry is left alone, and
+	// the engine's word-boundary rule is untouched by a populated map:
+	// `a:NAME:b` and `3:NAME:4` stay literal however the map is filled.
+	//
+	// The map is forwarded to the engine verbatim. It is deliberately not
+	// re-validated here: carve-go refuses an entry that cannot reach the
+	// engine intact (an empty name, a name containing "=", a NUL in either
+	// half) with its own message, and a second validation layer here could
+	// only disagree with it. Such an error surfaces through Convert rather
+	// than being swallowed or silently dropping the entry.
+	//
+	// SECURITY: values are substituted RAW, exactly as written, and are NOT
+	// escaped - that is what lets a symbol expand to markup such as an <img>
+	// tag, and it is deliberate across every Carve engine. The map is trusted
+	// processor configuration, on the same footing as the code calling this
+	// package. Populate it from the site's own configuration and never from
+	// page content, front matter, or anything else a document author
+	// supplies.
+	Symbols map[string]string
 }
 
 // ConvertWithOptions is Convert with explicit engine options.
 func ConvertWithOptions(source string, opts Options) (Result, error) {
 	fm, body := splitFrontMatter(source)
 
-	carveOpts := carve.Options{Static: opts.Static}
+	carveOpts := carve.Options{Static: opts.Static, Symbols: opts.Symbols}
 	if opts.Extensions || opts.Static {
 		// carve-go enables the full bundle for any non-empty slice.
 		carveOpts.Extensions = []string{"all"}
