@@ -144,6 +144,13 @@ func loadSymbolFile(path string) (map[string]string, error) {
 	if err := json.Unmarshal(blob, &raw); err != nil {
 		return nil, fmt.Errorf("symbols file %q: expected a JSON object mapping a name to a string: %w", path, err)
 	}
+	// A bare `null` unmarshals into a nil map WITHOUT an error, so it would
+	// otherwise be accepted as an empty map and the site would build with no
+	// symbols and no complaint. That is the worst outcome a misconfigured file
+	// can have: everything succeeds and every shortcode silently stays literal.
+	if raw == nil {
+		return nil, fmt.Errorf("symbols file %q: expected a JSON object mapping a name to a string, got null", path)
+	}
 	symbols := make(map[string]string, len(raw))
 	for name, encoded := range raw {
 		var value string

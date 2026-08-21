@@ -95,6 +95,8 @@ func TestSymbolMap_RejectsUnusableFile(t *testing.T) {
 	write(t, notObject, `["a", "b"]`)
 	notStrings := filepath.Join(dir, "numbers.json")
 	write(t, notStrings, `{"a": "ok", "n": 3}`)
+	null := filepath.Join(dir, "null.json")
+	write(t, null, "null")
 
 	for _, tc := range []struct {
 		name string
@@ -105,6 +107,10 @@ func TestSymbolMap_RejectsUnusableFile(t *testing.T) {
 		{"not JSON", notJSON, "expected a JSON object"},
 		{"not an object", notObject, "expected a JSON object"},
 		{"value not a string", notStrings, `value for symbol "n" must be a string`},
+		// `null` is the one shape that unmarshals into a map without an
+		// error, so without an explicit check it would build the whole site
+		// with an empty map and report nothing.
+		{"null", null, "got null"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := symbolMap([]string{tc.path}, nil)
