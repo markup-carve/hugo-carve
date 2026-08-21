@@ -55,6 +55,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	extensions := fs.Bool("extensions", false, "enable the bundled extensions (diagram presets - mermaid, plantuml, d2, graphviz, ... - plus details, spoiler, code-callouts, color, math)")
 	static := fs.Bool("static", false, "self-contained static HTML: flatten interactive constructs and degrade diagrams/math to source (implies -extensions)")
 	safe := fs.Bool("safe", false, "escape raw HTML (=html blocks and {=html} spans) instead of emitting it; set this for content the site did not author")
+	profile := fs.String("profile", "", "engine profile restricting what a document may contain and how large it may be: `full|article|comment|minimal` (default: off, the engine's full behavior). comment and minimal also cap the body at 100000 and 10000 bytes; an over-cap page is an error, never a blank page")
 	var symbolFiles repeatable
 	fs.Var(&symbolFiles, "symbols", "path to a JSON `file` mapping a symbol name to what :name: renders as (repeatable; merged left to right)")
 	var symbolPairs repeatable
@@ -90,6 +91,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		extensions: *extensions,
 		static:     *static,
 		safe:       *safe,
+		profile:    *profile,
 		symbols:    symbols,
 		log:        stdout,
 	}
@@ -104,6 +106,7 @@ type converter struct {
 	extensions bool
 	static     bool
 	safe       bool
+	profile    string
 	symbols    map[string]string
 	log        *os.File
 }
@@ -261,6 +264,7 @@ func (c *converter) convertFile(src string) error {
 		Extensions: c.extensions,
 		Static:     c.static,
 		Safe:       c.safe,
+		Profile:    c.profile,
 		Symbols:    c.symbols,
 	})
 	if err != nil {

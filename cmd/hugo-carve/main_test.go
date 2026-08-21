@@ -346,3 +346,96 @@ func readPage(t *testing.T, path string) string {
 	}
 	return string(blob)
 }
+
+// TestRun_ProfileFlagReachesTheRenderedPage is the end-to-end statement for
+// --profile: registered, parsed and handed to the converter, with the engine's
+// restriction visible in the file Hugo will read. The unit tests in
+// internal/convert would all pass with the flag never wired into run at all.
+func TestRun_ProfileFlagReachesTheRenderedPage(t *testing.T) {
+	content, devNull := profileFixture(t, "A [link](https://example.com/) and ![a](x.png).\n")
+
+	if err := run([]string{"--content", content, "--profile", "minimal", "--quiet"}, devNull, devNull); err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	out := readPage(t, filepath.Join(content, "page.html"))
+	if strings.Contains(out, "<img") || strings.Contains(out, "<a href") {
+		t.Errorf("--profile minimal should have restricted the link and the image, got:\n%s", out)
+	}
+	if !strings.Contains(out, "[img: a]") {
+		t.Errorf("--profile minimal should degrade the image to its alt text, got:\n%s", out)
+	}
+	if !strings.HasPrefix(out, "+++\n") {
+		t.Errorf("front matter should still lead the page, got:\n%s", out)
+	}
+}
+
+// TestRun_WithoutProfileNothingIsRestricted is the other half: the default is
+// what it has always been, so an existing site sees no change.
+func TestRun_WithoutProfileNothingIsRestricted(t *testing.T) {
+	content, devNull := profileFixture(t, "A [link](https://example.com/) and ![a](x.png).\n")
+
+	if err := run([]string{"--content", content, "--quiet"}, devNull, devNull); err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	out := readPage(t, filepath.Join(content, "page.html"))
+	if !strings.Contains(out, `<a href="https://example.com/">link</a>`) {
+		t.Errorf("without --profile the link should be untouched, got:\n%s", out)
+	}
+	if !strings.Contains(out, `<img src="x.png"`) {
+		t.Errorf("without --profile the image should be untouched, got:\n%s", out)
+	}
+}
+
+// TestRun_OverCapPageStopsTheBuildInsteadOfPublishingBlank is the failure this
+// flag exists to not have. The engine embedded in the pinned carve-go answers an
+// over-cap document with an empty render and exit 0, so forwarding the option
+// naively would write a blank .html that Hugo serves, with a green build and an
+// empty log. The run has to STOP, name the cap and the size, and leave no page
+// behind.
+func TestRun_OverCapPageStopsTheBuildInsteadOfPublishingBlank(t *testing.T) {
+	content, devNull := profileFixture(t, strings.Repeat("a", 10_000)+"\n")
+
+	err := run([]string{"--content", content, "--profile", "minimal", "--quiet"}, devNull, devNull)
+	if err == nil {
+		t.Fatal("expected run to refuse a page over the minimal profile's cap")
+	}
+	for _, want := range []string{"minimal", "10001", "10000"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q: %v", want, err)
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(content, "page.html")); statErr == nil {
+		t.Error("a refused page was still written; Hugo would serve it blank")
+	}
+}
+
+// TestRun_UnderCapPageStillConverts is the near miss for the case above. Without
+// it, a build that had stopped converting altogether would pass.
+func TestRun_UnderCapPageStillConverts(t *testing.T) {
+	content, devNull := profileFixture(t, strings.Repeat("a", 9_998)+"\n")
+
+	if err := run([]string{"--content", content, "--profile", "minimal", "--quiet"}, devNull, devNull); err != nil {
+		t.Fatalf("a page under the cap was refused: %v", err)
+	}
+	if !strings.Contains(readPage(t, filepath.Join(content, "page.html")), "<p>aaa") {
+		t.Error("a page under the cap rendered nothing recognizable")
+	}
+}
+
+// profileFixture builds a one-page content tree whose body is exactly the given
+// text, so a case can sit one byte either side of a cap.
+func profileFixture(t *testing.T, body string) (content string, devNull *os.File) {
+	t.Helper()
+	dir := t.TempDir()
+	content = filepath.Join(dir, "content")
+	if err := os.MkdirAll(content, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(content, "page.crv"), "+++\ntitle = \"P\"\n+++\n"+body)
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { devNull.Close() })
+	return content, devNull
+}
