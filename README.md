@@ -99,6 +99,11 @@ Converts *.crv files into Hugo HTML content pages.
         graphviz, ... - plus details, spoiler, code-callouts, color, math)
   -out string
         output directory (default: in place, next to the source)
+  -profile full|article|comment|minimal
+        engine profile restricting what a document may contain and how large
+        it may be: full|article|comment|minimal (default: off, the engine's
+        full behavior). comment and minimal also cap the body at 100000 and
+        10000 bytes; an over-cap page is an error, never a blank page
   -quiet
         suppress per-file log output
   -safe
@@ -132,6 +137,8 @@ Converts *.crv files into Hugo HTML content pages.
   and diagrams/math degrade to their source. Implies `--extensions`. (carve-go
   has no build-time image renderer over the WASI boundary, so static mode
   degrades diagrams to source rather than embedding an image.)
+- `--profile NAME` restricts what a document may contain and how large it may
+  be. Off by default. See [Profiles and their input caps](#profiles-and-their-input-caps).
 - `--symbols FILE` and `--symbol NAME=VALUE` supply the symbol map that decides
   what `:name:` renders as. See [Symbols](#symbols).
 
@@ -205,6 +212,67 @@ sandbox: it says nothing about what your Hugo templates, shortcodes or theme
 put on the page around the converted body. And it applies to what `hugo-carve`
 converts, so a `.html` file already sitting in `content/` is passed through by
 Hugo untouched, whatever this flag says.
+
+## Profiles and their input caps
+
+`--profile NAME` hands the engine one of its own profile names, which restricts
+what a document may contain. Off by default, and the empty default renders
+exactly what this tool has always rendered.
+
+```bash
+hugo-carve --content content --profile article && hugo
+```
+
+What each name does, measured against the pinned engine:
+
+| profile | links | images | raw HTML | input cap |
+| --- | --- | --- | --- | --- |
+| off (default) | kept | kept | emitted unless `--safe` | none |
+| `full` | kept | kept | emitted unless `--safe` | none |
+| `article` | kept | kept | escaped | none |
+| `comment` | kept, with `rel="nofollow ugc"` | degraded to `[img: ALT]` | escaped | 100000 bytes |
+| `minimal` | reduced to their text | degraded to `[img: ALT]` | escaped | 10000 bytes |
+
+`full` is the engine's full behavior and renders exactly what no profile at all
+renders, so it is a way to say the choice was deliberate rather than a change in
+output. For a Hugo *page* the useful names are `article` and `full`, and neither
+caps anything. `comment` and `minimal` are shaped for user-submitted snippets; they
+work on a page tree, but the cap below applies.
+
+The name is passed through as written. An unknown or wrongly-cased one comes
+back as the engine's own message, and names are case-sensitive:
+
+```
+$ hugo-carve --content content --profile COMMENT
+hugo-carve: convert "content/page.crv": render carve body: carve: engine exited with code 1: carve: unknown profile: COMMENT (expected full|article|comment|minimal)
+$ echo $?
+1
+```
+
+### An over-cap page stops the build
+
+The cap counts BYTES of the page BODY - front matter is split off before the
+engine sees anything and does not count toward it - and the count is bytes, not
+characters, so 5001 two-byte characters is 10001 bytes and over the `minimal`
+cap.
+
+A body over the cap is an ERROR that names the cap and the actual size, and no
+`.html` is written:
+
+```
+$ hugo-carve --content content --profile minimal
+hugo-carve: convert "content/page.crv": profile "minimal" discarded the whole body: it is 10001 bytes and the "minimal" profile caps input at 10000 bytes (front matter is not counted). Split the page, or render it with the "article" or "full" profile
+$ echo $?
+1
+```
+
+That refusal is the whole point of the flag being safe to use. The engine
+embedded in the pinned `carve-go` answers an over-cap document with an EMPTY
+render, exit status 0 and an empty stderr
+([carve-rs#1190](https://github.com/markup-carve/carve-rs/issues/1190)), so
+forwarding the option without the guard would write a blank page that Hugo
+publishes, with a green build and nothing in the log. A build that stops with a
+message beats a site that publishes an empty page.
 
 ## Symbols
 

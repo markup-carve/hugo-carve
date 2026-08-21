@@ -84,6 +84,29 @@ type Options struct {
 	// can arrive in a pull request.
 	Safe bool
 
+	// Profile restricts what a document may contain and how large it may be.
+	// It maps to the engine's --profile flag and takes one of the engine's own
+	// names: "full" (the default behavior), "article", "comment" or "minimal".
+	// The empty string leaves the option off entirely, which is what this
+	// package has always done.
+	//
+	// The name is forwarded verbatim and is NOT re-validated here: an unknown
+	// or wrongly-cased name comes back as the engine's own message
+	// (`carve: unknown profile: nope (expected full|article|comment|minimal)`),
+	// and a second list here could only disagree with it.
+	//
+	// CAPS. "comment" and "minimal" also cap the input, and the cap applies to
+	// the BODY handed to the engine - front matter is split off first and does
+	// not count toward it. Measured against the pinned engine: "comment"
+	// accepts 100000 bytes, "minimal" accepts 10000 bytes, and "full" and
+	// "article" have no cap under 4 MB. The count is bytes, not runes: 5001
+	// two-byte characters is 10001 bytes and is over the "minimal" cap.
+	//
+	// An over-cap body is a hard ERROR from ConvertWithOptions, never a page.
+	// See the profileMaxBytes comment for why this package refuses it itself
+	// rather than waiting for the engine to.
+	Profile string
+
 	// Symbols maps a shortcode name to the text `:NAME:` renders as. Carve
 	// parses `:name:` in its core - no extension needed - but what a name
 	// renders as is a render option, so with no map a shortcode renders as
@@ -112,7 +135,7 @@ type Options struct {
 func ConvertWithOptions(source string, opts Options) (Result, error) {
 	fm, body := splitFrontMatter(source)
 
-	carveOpts := carve.Options{Static: opts.Static, Safe: opts.Safe, Symbols: opts.Symbols}
+	carveOpts := carve.Options{Static: opts.Static, Safe: opts.Safe, Profile: opts.Profile, Symbols: opts.Symbols}
 	if opts.Extensions || opts.Static {
 		// carve-go enables the full bundle for any non-empty slice.
 		carveOpts.Extensions = []string{"all"}
@@ -120,6 +143,9 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 	html, err := carve.ToHTMLOptions(body, carveOpts)
 	if err != nil {
 		return Result{}, fmt.Errorf("render carve body: %w", err)
+	}
+	if err := checkProfileCap(opts.Profile, body, html); err != nil {
+		return Result{}, err
 	}
 	html = strings.TrimRight(html, "\n")
 
@@ -137,6 +163,58 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 	b.WriteString("\n")
 
 	return Result{FrontMatter: fm, BodyHTML: html, Output: b.String()}, nil
+}
+
+// profileMaxBytes is the input cap each named profile enforces, in bytes of
+// the BODY handed to the engine. "full" and "article" are absent because they
+// cap nothing. The numbers are the engine's, measured against the pinned
+// carve-go (hugo-carve#20).
+//
+// A second copy of someone else's number is normally the wrong shape, and this
+// package has twice declined to re-validate what the engine already checks -
+// a symbol name, a profile name. Both of those come back as an ERROR, so
+// restating them here could only produce a competing message for the same
+// refusal. An over-cap body does not: the engine embedded in the pinned
+// carve-go answers it with an empty render, exit 0 and an empty stderr, so a
+// misconfigured build publishes a BLANK PAGE and nothing anywhere says why
+// (markup-carve/carve-rs#1190). For a preprocessor whose output Hugo serves,
+// that failure reaches readers and no one upstream sees it.
+//
+// So the guard fires on the LOSS, not on the length. It needs BOTH an
+// over-cap body and an empty render, which is what keeps a stale number from
+// rotting into a wrong refusal in either direction:
+//
+//   - the engine raises a cap: an over-cap body still renders, the render is
+//     not empty, and nothing is refused.
+//   - the engine lowers a cap: the engine refuses first, and its own error
+//     surfaces through ConvertWithOptions above.
+//   - the engine learns to refuse (carve-rs#1194 is that fix, and carve-go's
+//     embedded wasm predates it): the engine's error surfaces above and this
+//     guard stops firing on its own, with no change here.
+//
+// It also cannot mistake a body that legitimately renders to nothing - a page
+// whose body is only a `%% ... %%` comment renders empty with or without a
+// profile - because such a body is not over the cap.
+var profileMaxBytes = map[string]int{
+	"comment": 100_000,
+	"minimal": 10_000,
+}
+
+// checkProfileCap turns a silently discarded over-cap body into an error
+// naming the cap and the actual size. It returns nil for every other outcome,
+// including every profile that caps nothing.
+func checkProfileCap(profile, body, html string) error {
+	max, capped := profileMaxBytes[profile]
+	if !capped || len(body) <= max {
+		return nil
+	}
+	if strings.TrimSpace(html) != "" {
+		return nil
+	}
+	return fmt.Errorf(
+		"profile %q discarded the whole body: it is %d bytes and the %q profile caps input at %d bytes "+
+			"(front matter is not counted). Split the page, or render it with the \"article\" or \"full\" profile",
+		profile, len(body), profile, max)
 }
 
 // splitFrontMatter separates a leading front matter block from the body.

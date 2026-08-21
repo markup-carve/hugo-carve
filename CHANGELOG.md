@@ -19,6 +19,12 @@ so engine pin moves get an entry of their own.
 - `--safe` / `convert.Options.Safe`, which escapes raw HTML (`=html` blocks and
   `{=html}` spans) instead of emitting it, so a site can render pages it did
   not author. Off by default, which is the existing behavior. (#18)
+- `--profile NAME` / `convert.Options.Profile`, forwarding the engine's
+  `full|article|comment|minimal` profiles. Off by default. A body over the
+  `comment` (100000 bytes) or `minimal` (10000 bytes) input cap is now a hard
+  error naming the cap and the actual size, instead of the engine's silent
+  empty render that would publish a blank page with a green build
+  (markup-carve/carve-rs#1190). (#20)
 
 ### Changed
 
