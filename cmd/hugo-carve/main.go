@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -24,6 +25,18 @@ import (
 
 	"github.com/markup-carve/hugo-carve/internal/convert"
 )
+
+// repeatable collects a flag that may be given more than once, in the order
+// the flags were written. The order is load-bearing for the symbol sources:
+// they merge left to right.
+type repeatable []string
+
+func (r *repeatable) String() string { return strings.Join(*r, ",") }
+
+func (r *repeatable) Set(v string) error {
+	*r = append(*r, v)
+	return nil
+}
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
@@ -41,12 +54,21 @@ func run(args []string, stdout, stderr *os.File) error {
 	quiet := fs.Bool("quiet", false, "suppress per-file log output")
 	extensions := fs.Bool("extensions", false, "enable the bundled extensions (diagram presets - mermaid, plantuml, d2, graphviz, ... - plus details, spoiler, code-callouts, color, math)")
 	static := fs.Bool("static", false, "self-contained static HTML: flatten interactive constructs and degrade diagrams/math to source (implies -extensions)")
+	var symbolFiles repeatable
+	fs.Var(&symbolFiles, "symbols", "path to a JSON `file` mapping a symbol name to what :name: renders as (repeatable; merged left to right)")
+	var symbolPairs repeatable
+	fs.Var(&symbolPairs, "symbol", "one symbol as `NAME=VALUE` (repeatable; applied after -symbols, so it overrides a file)")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: hugo-carve [flags]\n\n")
 		fmt.Fprintf(stderr, "Converts *.crv files into Hugo HTML content pages.\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	symbols, err := symbolMap(symbolFiles, symbolPairs)
+	if err != nil {
 		return err
 	}
 
@@ -57,6 +79,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		quiet:      *quiet,
 		extensions: *extensions,
 		static:     *static,
+		symbols:    symbols,
 		log:        stdout,
 	}
 	return c.walk()
@@ -69,7 +92,67 @@ type converter struct {
 	quiet      bool
 	extensions bool
 	static     bool
+	symbols    map[string]string
 	log        *os.File
+}
+
+// symbolMap merges the symbol sources into the single map handed to the
+// engine: every -symbols file in the order given, then every -symbol pair, so
+// a generated map can carry a handful of site-specific overrides.
+//
+// With no sources at all it returns nil rather than an empty map, so the
+// default path hands the engine exactly what it handed it before this flag
+// existed.
+//
+// Only the shape of the SOURCE is checked here - a file has to be a JSON
+// object of strings, and a pair has to contain "=" so a name and a value can
+// be told apart at all. What a name and a value may CONTAIN is the engine's
+// contract, and carve-go refuses an entry it cannot pass through intact with
+// its own message; re-stating those rules here would only give a site author
+// two chances to read a different one.
+func symbolMap(files, pairs []string) (map[string]string, error) {
+	if len(files) == 0 && len(pairs) == 0 {
+		return nil, nil
+	}
+	symbols := map[string]string{}
+	for _, path := range files {
+		loaded, err := loadSymbolFile(path)
+		if err != nil {
+			return nil, err
+		}
+		for name, value := range loaded {
+			symbols[name] = value
+		}
+	}
+	for _, pair := range pairs {
+		name, value, ok := strings.Cut(pair, "=")
+		if !ok {
+			return nil, fmt.Errorf("-symbol %q: expected NAME=VALUE", pair)
+		}
+		symbols[name] = value
+	}
+	return symbols, nil
+}
+
+// loadSymbolFile reads one JSON object of name -> string.
+func loadSymbolFile(path string) (map[string]string, error) {
+	blob, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read symbols file: %w", err)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(blob, &raw); err != nil {
+		return nil, fmt.Errorf("symbols file %q: expected a JSON object mapping a name to a string: %w", path, err)
+	}
+	symbols := make(map[string]string, len(raw))
+	for name, encoded := range raw {
+		var value string
+		if err := json.Unmarshal(encoded, &value); err != nil {
+			return nil, fmt.Errorf("symbols file %q: value for symbol %q must be a string", path, name)
+		}
+		symbols[name] = value
+	}
+	return symbols, nil
 }
 
 // carveExts are the recognized Carve file extensions.
@@ -158,6 +241,7 @@ func (c *converter) convertFile(src string) error {
 	res, err := convert.ConvertWithOptions(string(srcBytes), convert.Options{
 		Extensions: c.extensions,
 		Static:     c.static,
+		Symbols:    c.symbols,
 	})
 	if err != nil {
 		return fmt.Errorf("convert %q: %w", src, err)

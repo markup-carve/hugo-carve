@@ -232,3 +232,171 @@ func TestConvertWithOptions_StaticDegradesDiagrams(t *testing.T) {
 		t.Fatalf("static mode should degrade the diagram to a source code block, got %q", res.BodyHTML)
 	}
 }
+
+// Carve parses `:name:` in its core, but what a name renders as is a render
+// option, so the whole construct is inert on a Hugo site until a map reaches
+// the engine. These cases pin both halves: that a populated map substitutes,
+// and that everything about the construct is unchanged when it is not.
+
+// TestConvertWithOptions_SymbolsSubstitute is the case the option exists for:
+// a mapped name renders as its value.
+func TestConvertWithOptions_SymbolsSubstitute(t *testing.T) {
+	res, err := ConvertWithOptions("Ship it :rocket:\n", Options{
+		Symbols: map[string]string{"rocket": "\U0001F680"},
+	})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	if !strings.Contains(res.BodyHTML, "Ship it \U0001F680") {
+		t.Errorf("mapped symbol not substituted, got:\n%s", res.BodyHTML)
+	}
+	if strings.Contains(res.BodyHTML, ":rocket:") {
+		t.Errorf("mapped symbol left as source text, got:\n%s", res.BodyHTML)
+	}
+}
+
+// TestConvertWithOptions_NoSymbolsUnchanged pins the default. A nil map and an
+// empty map both have to render exactly what this package rendered before the
+// option existed, byte for byte - an additive option that quietly changed the
+// no-map output would be a breaking change wearing a feature's clothes.
+func TestConvertWithOptions_NoSymbolsUnchanged(t *testing.T) {
+	const src = "+++\ntitle = \"S\"\n+++\n\nShip it :rocket: and *bold*.\n"
+
+	base, err := Convert(src)
+	if err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+	if !strings.Contains(base.BodyHTML, ":rocket:") {
+		t.Fatalf("with no map, the shortcode should stay literal, got:\n%s", base.BodyHTML)
+	}
+
+	for _, tc := range []struct {
+		name string
+		opts Options
+	}{
+		{"nil map", Options{}},
+		{"nil map, explicit", Options{Symbols: nil}},
+		{"empty map", Options{Symbols: map[string]string{}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ConvertWithOptions(src, tc.opts)
+			if err != nil {
+				t.Fatalf("ConvertWithOptions error: %v", err)
+			}
+			if got.Output != base.Output {
+				t.Errorf("output differs from the no-option render:\n got: %q\nwant: %q", got.Output, base.Output)
+			}
+		})
+	}
+}
+
+// TestConvertWithOptions_SymbolsLeaveUnknownNameLiteral pins that a map is a
+// lookup and not a mode: a name it does not carry is left exactly as written,
+// rather than becoming an error or an empty string.
+func TestConvertWithOptions_SymbolsLeaveUnknownNameLiteral(t *testing.T) {
+	res, err := ConvertWithOptions("Ship it :rocket: :shrug:\n", Options{
+		Symbols: map[string]string{"rocket": "\U0001F680"},
+	})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	if !strings.Contains(res.BodyHTML, ":shrug:") {
+		t.Errorf("unmapped name should stay literal, got:\n%s", res.BodyHTML)
+	}
+}
+
+// TestConvertWithOptions_SymbolsKeepWordBoundary pins that populating the map
+// does not widen where a shortcode is recognized. All four shapes are rendered
+// in ONE document with the map active, so the substitution that must happen and
+// the three that must not are decided by the same render - a test where the
+// negatives came from a separate no-map render would pass even if the map
+// disabled the guard entirely.
+func TestConvertWithOptions_SymbolsKeepWordBoundary(t *testing.T) {
+	src := "a:rocket:b and 3:rocket:4 and `A :rocket: x` and A :rocket: here\n"
+	res, err := ConvertWithOptions(src, Options{
+		Symbols: map[string]string{"rocket": "SUBSTITUTED"},
+	})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	for _, want := range []string{"a:rocket:b", "3:rocket:4", "<code>A :rocket: x</code>", "A SUBSTITUTED here"} {
+		if !strings.Contains(res.BodyHTML, want) {
+			t.Errorf("expected %q in body HTML, got:\n%s", want, res.BodyHTML)
+		}
+	}
+	if strings.Count(res.BodyHTML, "SUBSTITUTED") != 1 {
+		t.Errorf("exactly one substitution expected, got:\n%s", res.BodyHTML)
+	}
+}
+
+// TestConvertWithOptions_SymbolsSubstituteRaw pins the security contract the
+// documentation states: a value is emitted RAW, not escaped. It is what lets a
+// symbol expand to markup, and it is why the map may only ever be built from
+// the site author's own configuration. If this ever starts escaping, the README
+// warning is wrong and has to change with it.
+func TestConvertWithOptions_SymbolsSubstituteRaw(t *testing.T) {
+	res, err := ConvertWithOptions("A :logo: here\n", Options{
+		Symbols: map[string]string{"logo": "<img src='/l.svg'>"},
+	})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	if !strings.Contains(res.BodyHTML, "<img src='/l.svg'>") {
+		t.Errorf("symbol value should reach the output raw, got:\n%s", res.BodyHTML)
+	}
+}
+
+// TestConvertWithOptions_SymbolsSurfaceEngineError pins that this package adds
+// no validation layer of its own AND swallows none of the engine's. carve-go
+// refuses an entry that cannot reach the engine intact; the caller has to see
+// that message rather than a silently shorter map.
+func TestConvertWithOptions_SymbolsSurfaceEngineError(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		symbols map[string]string
+		want    string
+	}{
+		{"name contains =", map[string]string{"a=b": "c"}, `must not contain "="`},
+		{"empty name", map[string]string{"": "x"}, "must not be empty"},
+		{"NUL in value", map[string]string{"n": "v\x00"}, "must not contain a NUL"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ConvertWithOptions("A :a: here\n", Options{Symbols: tc.symbols})
+			if err == nil {
+				t.Fatalf("expected the engine to refuse %v, got no error", tc.symbols)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("expected the engine's own message containing %q, got: %v", tc.want, err)
+			}
+		})
+	}
+}
+
+// TestConvertWithOptions_SymbolsReachTheEngineUnchanged closes the gap the
+// cases above leave open. Every one of them asserts on rendered HTML, so a
+// forwarding bug that dropped, renamed or filtered entries on the way through
+// could still satisfy them for the names they happen to name. This compares
+// against the SAME linked engine called directly, in the spirit of
+// TestConvertAddsNothingToTheEngine: whatever carve-go does with a map, this
+// package has to produce exactly that.
+func TestConvertWithOptions_SymbolsReachTheEngineUnchanged(t *testing.T) {
+	symbols := map[string]string{
+		"rocket": "\U0001F680",
+		"logo":   "<img src='/l.svg'>",
+		"zz":     "never referenced",
+	}
+	const body = "Ship it :rocket: and :logo: and :shrug:\n"
+
+	got, err := ConvertWithOptions(body, Options{Symbols: symbols})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	want, err := carve.ToHTMLOptions(body, carve.Options{Symbols: symbols})
+	if err != nil {
+		t.Fatalf("carve.ToHTMLOptions error: %v", err)
+	}
+	if got.BodyHTML != strings.TrimRight(want, "\n") {
+		t.Errorf("this package renders a symbol map differently from the engine it links:\n got: %q\nwant: %q",
+			got.BodyHTML, strings.TrimRight(want, "\n"))
+	}
+}

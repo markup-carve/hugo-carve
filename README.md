@@ -104,6 +104,12 @@ Converts *.crv files into Hugo HTML content pages.
   -static
         self-contained static HTML: flatten interactive constructs and degrade
         diagrams/math to source (implies -extensions)
+  -symbol NAME=VALUE
+        one symbol as NAME=VALUE (repeatable; applied after -symbols, so it
+        overrides a file)
+  -symbols file
+        path to a JSON file mapping a symbol name to what :name: renders as
+        (repeatable; merged left to right)
 ```
 
 - `--content DIR` selects the tree to scan (default `content`).
@@ -121,6 +127,76 @@ Converts *.crv files into Hugo HTML content pages.
   and diagrams/math degrade to their source. Implies `--extensions`. (carve-go
   has no build-time image renderer over the WASI boundary, so static mode
   degrades diagrams to source rather than embedding an image.)
+- `--symbols FILE` and `--symbol NAME=VALUE` supply the symbol map that decides
+  what `:name:` renders as. See [Symbols](#symbols).
+
+## Symbols
+
+Carve parses `:name:` in its core - no extension needed - but what a name
+renders as is a render option. With no map configured, a shortcode renders as
+its own source text:
+
+```
+Ship it :rocket: :shrug:
+```
+
+```html
+<p>Ship it :rocket: :shrug:</p>
+```
+
+`--symbols FILE` supplies the map, as a JSON object. Keep it in your site
+repository next to `hugo.toml` (or under `data/`, which Hugo already treats as
+site data), so the map is part of the site's configuration:
+
+```json
+{
+  "rocket": "🚀",
+  "smile": "😄"
+}
+```
+
+```bash
+hugo-carve --content content --symbols data/carve-symbols.json && hugo
+```
+
+```html
+<p>Ship it 🚀 :shrug:</p>
+```
+
+An unmapped name stays literal, as `:shrug:` does above - it never becomes an
+error or an empty string.
+
+Both flags are repeatable, and the sources merge left to right: every
+`--symbols` file in the order given, then every `--symbol` pair. So a generated
+map can carry a handful of site-specific overrides without being edited:
+
+```bash
+hugo-carve --content content \
+  --symbols data/emoji.json \
+  --symbol rocket=🚀 \
+  --symbol logo='<img src="/logo.svg" alt="">'
+```
+
+The word-boundary guard is unaffected by a populated map. In one document with
+`rocket` mapped, only the fourth of these substitutes:
+
+```
+a:rocket:b and 3:rocket:4 and `A :rocket: x` and A :rocket: here
+```
+
+A name or value the engine cannot pass through intact - an empty name, a name
+containing `=`, a NUL in either half - is refused by `carve-go` with its own
+message, and `hugo-carve` reports it and converts nothing. There is no second
+set of rules here to disagree with the engine's.
+
+> **Security: symbol values are TRUSTED RAW output.**
+> A mapped value is inserted into the page **unescaped** - that is deliberate
+> across every Carve engine, and it is what lets a symbol expand to markup such
+> as an `<img>` tag. The map is therefore trusted processor configuration, on
+> the same footing as your templates. Build it only from **your own site
+> configuration** - a file in your site repository, or a `--symbol` flag in your
+> build command. **Never** build it from page content, front matter, or anything
+> else a document author supplies: a value is a script-injection vector.
 
 ## Required Hugo configuration
 

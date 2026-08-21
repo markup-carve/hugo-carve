@@ -7,6 +7,21 @@ links `carve-go`, and `carve-go` embeds a prebuilt WebAssembly module compiled
 from `carve-rs`. An engine change can therefore alter output with no diff here,
 so engine pin moves get an entry of their own.
 
+## Unreleased
+
+### Added
+
+- A symbol map, so `:name:` renders as something on a Hugo site instead of as
+  its own source text. `convert.Options.Symbols`, and `--symbols FILE` /
+  `--symbol NAME=VALUE` on the command line (both repeatable, merged left to
+  right). Values are substituted raw, so the map is site configuration only -
+  see the security note in the README. (#16)
+
+### Changed
+
+- The `carve-go` pin moves to `v0.1.2-0.20260821023146-73f58ce7cef1`, which is
+  the first revision carrying `Options.Symbols`.
+
 ## v0.1.0 - 2026-08-18
 
 First release.
