@@ -214,8 +214,14 @@ func TestConvertWithOptions_ExtensionsEnableDiagrams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConvertWithOptions error: %v", err)
 	}
-	if !strings.Contains(on.BodyHTML, `<pre class="plantuml">A -> B</pre>`) {
+	if !strings.Contains(on.BodyHTML, `class="plantuml"`) || !strings.Contains(on.BodyHTML, `A -> B</pre>`) {
 		t.Fatalf("expected plantuml hydration element, got %q", on.BodyHTML)
+	}
+	// carve-go 0.1.2 labels diagram containers for assistive tech. Asserting
+	// the whole tag as one literal turned that into a failure; assert what
+	// the element has to carry, and that the labelling is part of it.
+	if !strings.Contains(on.BodyHTML, `role="img"`) || !strings.Contains(on.BodyHTML, `aria-label="plantuml"`) {
+		t.Fatalf("the diagram container lost its accessibility attributes: %q", on.BodyHTML)
 	}
 }
 
