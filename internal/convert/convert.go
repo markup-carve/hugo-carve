@@ -142,6 +142,13 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 	}
 	html, err := carve.ToHTMLOptions(body, carveOpts)
 	if err != nil {
+		// The engine reports the cap it enforced but not which profile set
+		// it. The caller chose that profile, so name it here instead of
+		// relying on the engine to echo it back - carve-go 0.1.2 stopped.
+		if opts.Profile != "" {
+			return Result{}, fmt.Errorf("render carve body under profile %q: %w", opts.Profile, err)
+		}
+
 		return Result{}, fmt.Errorf("render carve body: %w", err)
 	}
 	if err := checkProfileCap(opts.Profile, body, html); err != nil {
