@@ -419,22 +419,4 @@ it outside the example.
 
 ## Development
 
-This repo uses a local `replace` for `carve-go` during development:
-
-```
-replace github.com/markup-carve/carve-go => /tmp/go-carve
-```
-
-For published use, drop the `replace` and pin a released version:
-
-```
-require github.com/markup-carve/carve-go vX.Y.Z
-```
-
-Run the tests:
-
-```bash
-go build ./...
-go vet ./...
-go test ./...
-```
+Contributor setup, testing, and maintenance notes are in the [development guide](docs/development.md).
