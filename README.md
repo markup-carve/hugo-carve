@@ -266,7 +266,7 @@ $ echo $?
 1
 ```
 
-That refusal is the whole point of the flag being safe to use. The engine
+That refusal is what makes the flag safe to use. The engine
 embedded in the pinned `carve-go` answers an over-cap document with an EMPTY
 render, exit status 0 and an empty stderr
 ([carve-rs#1190](https://github.com/markup-carve/carve-rs/issues/1190)), so
