@@ -3,7 +3,7 @@
 # What the go.mod pin costs, in documents.
 #
 # This repository renders with an engine it never builds, two pins deep: go.mod
-# pins a carve-go pseudo-version, and that carve-go embeds a prebuilt `.wasm`
+# pins a carve-go version, and that carve-go embeds a prebuilt `.wasm`
 # compiled from some carve-rs commit. A commit distance between any two of them
 # is a proxy - 200 carve-rs commits can change nothing and one can change a
 # construct - so this drives the mandatory spec corpus through Convert twice,
