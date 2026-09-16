@@ -524,21 +524,22 @@ func chdir(t *testing.T, dir string) {
 	})
 }
 
-// TestRun_ARelativeIncludeRootIsRefused pins that a CONFIGURED root reaches the
-// engine as written: absolutizing it here is what would stop the refusal.
-func TestRun_ARelativeIncludeRootIsRefused(t *testing.T) {
-	content := includeSite(t)
-	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+// TestRun_ARelativeIncludeRootResolvesAgainstTheWorkingDirectory pins that a
+// typed root means the current directory. "." read against the content
+// directory would not reach ../shared, so only the cwd reading expands it.
+func TestRun_ARelativeIncludeRootResolvesAgainstTheWorkingDirectory(t *testing.T) {
+	site := t.TempDir()
+	content := filepath.Join(site, "content")
+	writeFile(t, filepath.Join(site, "shared", "frag.crv"), "Shared fragment.\n")
+	writeFile(t, filepath.Join(content, "index.crv"), "{{ ../shared/frag.crv }}\n")
+	chdir(t, site)
+	runCLI(t, "--content", "content", "--includes", "--include-root", ".", "--quiet")
+	out, err := os.ReadFile(filepath.Join(content, "index.html"))
 	if err != nil {
-		t.Fatalf("open devnull: %v", err)
+		t.Fatalf("read output: %v", err)
 	}
-	defer devnull.Close()
-	err = run([]string{"--content", content, "--includes", "--include-root", "content", "--quiet"}, devnull, devnull)
-	if err == nil {
-		t.Fatal("expected a relative root to be refused")
-	}
-	if !strings.Contains(err.Error(), "absolute") {
-		t.Errorf("expected the refusal to name the rule, got %v", err)
+	if !strings.Contains(string(out), "Shared fragment.") {
+		t.Errorf("expected the root to resolve against the working directory, got %q", out)
 	}
 }
 

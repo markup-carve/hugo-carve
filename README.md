@@ -100,8 +100,8 @@ Converts *.crv files into Hugo HTML content pages.
         enable the bundled extensions (diagram presets - mermaid, plantuml, d2,
         graphviz, ... - plus details, spoiler, code-callouts, color, math)
   -include-root directory
-        absolute containment root for includes (default: the content
-        directory). A relative value is refused, not resolved
+        containment root for includes (default: the content directory). A
+        relative value resolves against the working directory
   -includes
         expand {{ path }} includes from disk, contained to -include-root
   -out string
@@ -167,10 +167,8 @@ Paths resolve relative to the file that wrote them, and nothing resolves outside
 the containment root. The root is the content directory unless `--include-root`
 names another one, and an include that would leave it is not expanded.
 
-`--include-root` must be an **absolute** path. A relative one is refused rather
-than resolved, because resolving it lands on whatever directory the build ran
-from, which is not a root anyone chose. The default is derived from `--content`
-and is made absolute here, where the decision is visible.
+A relative `--include-root` resolves against the directory you run the command
+from, as with any shell tool, and so does the default derived from `--content`.
 
 Front matter is split off before the body reaches the engine, and the directive
 still resolves from where the page actually lives: carve-go serves the body it
