@@ -94,9 +94,16 @@ Converts *.crv files into Hugo HTML content pages.
         remove generated .html outputs instead of building them
   -content string
         content directory to scan for Carve files (default "content")
+  -deps file
+        write the include dependencies of every page to this JSON file
   -extensions
         enable the bundled extensions (diagram presets - mermaid, plantuml, d2,
         graphviz, ... - plus details, spoiler, code-callouts, color, math)
+  -include-root directory
+        absolute containment root for includes (default: the content
+        directory). A relative value is refused, not resolved
+  -includes
+        expand {{ path }} includes from disk, contained to -include-root
   -out string
         output directory (default: in place, next to the source)
   -profile full|article|comment|minimal
@@ -146,6 +153,61 @@ Converts *.crv files into Hugo HTML content pages.
 rather than ignored, because Go's flag parsing stops at the first non-flag
 argument: `hugo-carve content --safe` would otherwise read `content` as an
 operand, never apply `--safe`, and exit 0 having passed raw HTML through.
+
+## Includes
+
+A Carve page can pull another file in with `{{ path }}`. It stays literal until
+the build asks:
+
+```sh
+hugo-carve --content content --includes
+```
+
+Paths resolve relative to the file that wrote them, and nothing resolves outside
+the containment root. The root is the content directory unless `--include-root`
+names another one, and an include that would leave it is not expanded.
+
+`--include-root` must be an **absolute** path. A relative one is refused rather
+than resolved, because resolving it lands on whatever directory the build ran
+from, which is not a root anyone chose. The default is derived from `--content`
+and is made absolute here, where the decision is visible.
+
+Front matter is split off before the body reaches the engine, and the directive
+still resolves from where the page actually lives: carve-go serves the body it
+was handed for the page's own path and the real tree for everything else.
+
+A target that cannot be read leaves the directive as written and prints a line
+naming the page. The message does not say whether the file was missing or
+refused by containment: both report `include-unresolved`, so a page cannot be
+used to probe the filesystem.
+
+### Knowing when to run again
+
+`--deps FILE` writes what each page read:
+
+```json
+[
+  {
+    "page": "content/index.crv",
+    "targets": ["/srv/site/content/sub/frag.crv"],
+    "unresolved": ["nope.crv"]
+  }
+]
+```
+
+`targets` are host paths and are complete. `unresolved` holds directives as
+written, because no host path was ever established for one, so those cannot be
+watched. An entry carrying `"incomplete": true` means the engine's warning cap
+was reached and `unresolved` is a sample; rebuild unconditionally rather than
+trusting it (markup-carve/carve-rs#1676).
+
+There is no call into Hugo's own dependency tracker, and there cannot be: Hugo
+runs as a separate process after this one and exposes no plugin API. The
+manifest is for whatever drives the two.
+
+> Fragments under the content directory are pages in their own right, so the
+> walk converts them and Hugo publishes them. Keep fragments outside `content`
+> and point `--include-root` at the tree above both.
 
 ## Raw HTML and `--safe`
 

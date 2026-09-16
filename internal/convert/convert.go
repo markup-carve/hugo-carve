@@ -9,6 +9,7 @@
 package convert
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -33,6 +34,16 @@ type Result struct {
 	// Output is the full file content to write: front matter (if any),
 	// a blank line, then the rendered HTML.
 	Output string
+	// Warnings are the include degradations the engine reported. Empty
+	// whenever expansion was off.
+	Warnings []carve.IncludeWarning
+	// Dependencies are the include targets touched (spec I11), for a build
+	// that wants to know when to run again.
+	Dependencies []carve.IncludeDependency
+	// SuppressedWarnings counts the warnings the engine raised past its own
+	// cap. Non-zero means Dependencies is a sample of its refused half, so a
+	// host watching it has to rebuild unconditionally instead.
+	SuppressedWarnings int
 }
 
 // Convert renders a Carve source document to a Hugo HTML content page.
@@ -129,6 +140,35 @@ type Options struct {
 	// page content, front matter, or anything else a document author
 	// supplies.
 	Symbols map[string]string
+
+	// Includes expands `{{ path }}` directives from disk (spec PART 9 section
+	// 19). Off by default, which leaves a directive literal - the behavior
+	// every entry point in this package has always had.
+	//
+	// It needs IncludeRoot and SourcePath; without either, ConvertWithOptions
+	// refuses rather than expanding against a root nobody chose.
+	Includes bool
+
+	// IncludeRoot is the containment root, an ABSOLUTE host directory. No
+	// include resolves outside it.
+	//
+	// It reaches carve-go as written. A relative root is refused there rather
+	// than absolutized, because section 19 forbids containment defaulting to
+	// the process working directory and every canonicalizer resolves a
+	// relative path against exactly that. Absolutizing it here would mean the
+	// refusal never fires.
+	IncludeRoot string
+
+	// SourcePath is the document's own path: absolute, inside IncludeRoot, and
+	// pointing at the file the source was read from. Relative directives
+	// resolve against its directory.
+	//
+	// The file on disk holds Carve WITH its front matter, while the body
+	// handed to the engine has had that split off. carve-go serves the body it
+	// is given for this one path and the real tree for everything else, so the
+	// split costs nothing and relative includes still resolve from where the
+	// page actually lives.
+	SourcePath string
 }
 
 // ConvertWithOptions is Convert with explicit engine options.
@@ -140,7 +180,24 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 		// carve-go enables the full bundle for any non-empty slice.
 		carveOpts.Extensions = []string{"all"}
 	}
-	html, err := carve.ToHTMLOptions(body, carveOpts)
+
+	var (
+		html     string
+		err      error
+		included carve.IncludeResult
+	)
+	if opts.Includes {
+		// An empty IncludeRoot or SourcePath is refused by carve-go, which
+		// requires both to be absolute. Restating the rule here would only
+		// produce a second message for the same refusal.
+		included, err = carve.RenderWithIncludes(body, carve.OutputHTML, carveOpts, carve.Include{
+			Root:       opts.IncludeRoot,
+			SourcePath: opts.SourcePath,
+		})
+		html = included.Output
+	} else {
+		html, err = carve.ToHTMLOptions(body, carveOpts)
+	}
 	if err != nil {
 		// The engine reports the cap it enforced but not which profile set
 		// it. The caller chose that profile, so name it here instead of
@@ -169,7 +226,14 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 	b.WriteString(html)
 	b.WriteString("\n")
 
-	return Result{FrontMatter: fm, BodyHTML: html, Output: b.String()}, nil
+	return Result{
+		FrontMatter:        fm,
+		BodyHTML:           html,
+		Output:             b.String(),
+		Warnings:           included.Warnings,
+		Dependencies:       included.Dependencies,
+		SuppressedWarnings: included.SuppressedWarnings,
+	}, nil
 }
 
 // profileMaxBytes is the input cap each named profile enforces, in bytes of
@@ -306,7 +370,18 @@ func splitJSON(s string) (block, rest string, ok bool) {
 		case '}':
 			depth--
 			if depth == 0 {
-				return s[:j+1], s[j+1:], true
+				candidate := s[:j+1]
+				// Brace-balanced is not the same as JSON. `{{ path }}` balances
+				// and is an include directive, so a page opening with one and
+				// carrying no front matter lost its whole body to this scan.
+				// Hugo reads JSON front matter as an object, so anything that
+				// is not one is body content.
+				var object map[string]json.RawMessage
+				if json.Unmarshal([]byte(candidate), &object) != nil {
+					return "", "", false
+				}
+
+				return candidate, s[j+1:], true
 			}
 		}
 	}

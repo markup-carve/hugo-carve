@@ -9,6 +9,26 @@ so engine pin moves get an entry of their own.
 
 ## Unreleased
 
+### Added
+
+- `--includes` expands `{{ path }}` directives from disk, contained to
+  `--include-root` (default: the content directory). Off by default.
+  `--deps FILE` writes what each page read, for a build that needs to know when
+  to run again. markup-carve/hugo-carve#27
+
+### Fixed
+
+- A page opening with `{{ path }}` and carrying no front matter rendered to
+  nothing: the JSON front-matter scan accepted any brace-balanced leading block,
+  and an include directive balances. A leading block now has to parse as a JSON
+  object to count as front matter.
+
+### Changed
+
+- The carve-go pin moves to `main` (v0.1.3-0.20260916042933-d83559d6103b), which
+  is the revision exposing `RenderWithIncludes` and the rebuilt WASI artifact
+  behind it.
+
 ## v0.1.0 - 2026-09-09
 
 First release.
