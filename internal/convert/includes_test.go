@@ -112,6 +112,8 @@ func TestIncludes_WithoutASourcePathIsRefused(t *testing.T) {
 func TestIncludes_ARelativeRootIsRefused(t *testing.T) {
 	s := newSite(t)
 	body, opts := s.page(t, "index.crv", "{{ sub/frag.crv }}\n")
+	// From here "content" resolves to the real root, so only the refusal fails it.
+	t.Chdir(s.root)
 	opts.IncludeRoot = "content"
 	_, err := ConvertWithOptions(body, opts)
 	if err == nil {

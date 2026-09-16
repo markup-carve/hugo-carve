@@ -57,7 +57,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	safe := fs.Bool("safe", false, "escape raw HTML (=html blocks and {=html} spans) instead of emitting it; set this for content the site did not author")
 	profile := fs.String("profile", "", "engine profile restricting what a document may contain and how large it may be: `full|article|comment|minimal` (default: off, the engine's full behavior). comment and minimal also cap the body at 100000 and 10000 bytes; an over-cap page is an error, never a blank page")
 	includes := fs.Bool("includes", false, "expand `{{ path }}` includes from disk, contained to -include-root")
-	includeRoot := fs.String("include-root", "", "absolute containment root for includes (default: the content `directory`). A relative value is refused, not resolved")
+	includeRoot := fs.String("include-root", "", "containment root for includes (default: the content `directory`). A relative value resolves against the working directory")
 	depsFile := fs.String("deps", "", "write the include dependencies of every page to this JSON `file`")
 	var symbolFiles repeatable
 	fs.Var(&symbolFiles, "symbols", "path to a JSON `file` mapping a symbol name to what :name: renders as (repeatable; merged left to right)")
@@ -86,17 +86,19 @@ func run(args []string, stdout, stderr *os.File) error {
 		return err
 	}
 
-	// The DERIVED default is absolutized; a configured one is not. carve-go
-	// refuses a relative root, and that refusal is what keeps containment off
-	// the directory the build happened to run from - resolving a configured
-	// value here would disarm it. The default is this tool's own value, so
-	// there is nothing to disarm.
+	// A root typed on the command line means the current directory, as it does
+	// for any shell tool. convert.Options stays strict: it refuses a relative
+	// root, which is what keeps a configured one off the working directory.
 	root := *includeRoot
-	if *includes && root == "" {
-		root, err = filepath.Abs(*contentDir)
-		if err != nil {
-			return fmt.Errorf("content directory %q: %w", *contentDir, err)
+	if *includes {
+		if root == "" {
+			root = *contentDir
 		}
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			return fmt.Errorf("include root %q: %w", root, err)
+		}
+		root = abs
 	}
 
 	c := &converter{
