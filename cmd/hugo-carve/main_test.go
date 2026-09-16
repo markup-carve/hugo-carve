@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -438,4 +439,191 @@ func profileFixture(t *testing.T, body string) (content string, devNull *os.File
 	}
 	t.Cleanup(func() { devNull.Close() })
 	return content, devNull
+}
+
+// --- include expansion ----------------------------------------------------
+
+func writeFile(t *testing.T, path, body string) string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write %q: %v", path, err)
+	}
+	return path
+}
+
+// includeSite builds a content tree with one page and one fragment and returns
+// the content directory.
+func includeSite(t *testing.T) string {
+	t.Helper()
+	content := filepath.Join(t.TempDir(), "content")
+	writeFile(t, filepath.Join(content, "sub", "frag.crv"), "Fragment body here.\n")
+	writeFile(t, filepath.Join(content, "index.crv"), "{{ sub/frag.crv }}\n")
+	return content
+}
+
+func runCLI(t *testing.T, args ...string) {
+	t.Helper()
+	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open devnull: %v", err)
+	}
+	defer devnull.Close()
+	if err := run(args, devnull, devnull); err != nil {
+		t.Fatalf("run %v: %v", args, err)
+	}
+}
+
+// TestRun_IncludesOffLeavesTheDirectiveLiteral pins the default.
+func TestRun_IncludesOffLeavesTheDirectiveLiteral(t *testing.T) {
+	content := includeSite(t)
+	runCLI(t, "--content", content, "--quiet")
+	out, err := os.ReadFile(filepath.Join(content, "index.html"))
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	if !strings.Contains(string(out), "{{ sub/frag.crv }}") {
+		t.Errorf("expected the directive to stay literal, got %q", out)
+	}
+}
+
+// TestRun_IncludesExpandUnderTheContentRoot pins the derived default root.
+//
+// -content is RELATIVE here on purpose. With an absolute one the test cannot
+// tell an absolutized default from one passed through, and the engine refuses
+// a relative root - so this is what proves the default is made absolute.
+func TestRun_IncludesExpandUnderTheContentRoot(t *testing.T) {
+	content := includeSite(t)
+	chdir(t, filepath.Dir(content))
+	runCLI(t, "--content", "content", "--includes", "--quiet")
+	out, err := os.ReadFile(filepath.Join(content, "index.html"))
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	if !strings.Contains(string(out), "Fragment") {
+		t.Errorf("expected the fragment, got %q", out)
+	}
+}
+
+// chdir moves into dir for the duration of the test.
+func chdir(t *testing.T, dir string) {
+	t.Helper()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir %q: %v", dir, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatalf("chdir back: %v", err)
+		}
+	})
+}
+
+// TestRun_ARelativeIncludeRootIsRefused pins that a CONFIGURED root reaches the
+// engine as written: absolutizing it here is what would stop the refusal.
+func TestRun_ARelativeIncludeRootIsRefused(t *testing.T) {
+	content := includeSite(t)
+	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open devnull: %v", err)
+	}
+	defer devnull.Close()
+	err = run([]string{"--content", content, "--includes", "--include-root", "content", "--quiet"}, devnull, devnull)
+	if err == nil {
+		t.Fatal("expected a relative root to be refused")
+	}
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Errorf("expected the refusal to name the rule, got %v", err)
+	}
+}
+
+// TestRun_DepsManifestNamesWhatWasRead pins the manifest a build watches.
+func TestRun_DepsManifestNamesWhatWasRead(t *testing.T) {
+	content := includeSite(t)
+	manifest := filepath.Join(t.TempDir(), "deps.json")
+	runCLI(t, "--content", content, "--includes", "--deps", manifest, "--quiet")
+
+	raw, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	var pages []pageDeps
+	if err := json.Unmarshal(raw, &pages); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	// Two entries, not one: the fragment is a `.crv` under the content
+	// directory, so the walk converts it as a page of its own.
+	want := filepath.Join(content, "sub", "frag.crv")
+	var page *pageDeps
+	for i := range pages {
+		if pages[i].Page == filepath.Join(content, "index.crv") {
+			page = &pages[i]
+		}
+	}
+	if page == nil {
+		t.Fatalf("the page is missing from the manifest: %s", raw)
+	}
+	var found bool
+	for _, target := range page.Targets {
+		if target == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected %q among the targets, got %+v", want, *page)
+	}
+	if page.Incomplete {
+		t.Errorf("nothing was suppressed, so the entry should not be incomplete: %+v", *page)
+	}
+}
+
+// TestRun_DepsManifestSeparatesWhatItCouldNotRead pins the half that cannot be
+// watched: no host path was ever established for it.
+func TestRun_DepsManifestSeparatesWhatItCouldNotRead(t *testing.T) {
+	content := includeSite(t)
+	writeFile(t, filepath.Join(content, "index.crv"), "{{ nope.crv }}\n")
+	manifest := filepath.Join(t.TempDir(), "deps.json")
+	runCLI(t, "--content", content, "--includes", "--deps", manifest, "--quiet")
+
+	raw, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	var pages []pageDeps
+	if err := json.Unmarshal(raw, &pages); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	for _, page := range pages {
+		if page.Page != filepath.Join(content, "index.crv") {
+			continue
+		}
+		if len(page.Targets) != 0 {
+			t.Errorf("nothing was read, got %+v", page.Targets)
+		}
+		if len(page.Unresolved) != 1 || page.Unresolved[0] != "nope.crv" {
+			t.Errorf("expected the directive as written, got %+v", page.Unresolved)
+		}
+		return
+	}
+	t.Errorf("the page is missing from the manifest: %s", raw)
+}
+
+// TestRun_NoDepsManifestWithoutTheFlag keeps the default free of a new artifact.
+func TestRun_NoDepsManifestWithoutTheFlag(t *testing.T) {
+	content := includeSite(t)
+	runCLI(t, "--content", content, "--includes", "--quiet")
+	entries, err := os.ReadDir(content)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".json") {
+			t.Errorf("unexpected manifest %q", entry.Name())
+		}
+	}
 }

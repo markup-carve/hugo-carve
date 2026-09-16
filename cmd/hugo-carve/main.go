@@ -56,6 +56,9 @@ func run(args []string, stdout, stderr *os.File) error {
 	static := fs.Bool("static", false, "self-contained static HTML: flatten interactive constructs and degrade diagrams/math to source (implies -extensions)")
 	safe := fs.Bool("safe", false, "escape raw HTML (=html blocks and {=html} spans) instead of emitting it; set this for content the site did not author")
 	profile := fs.String("profile", "", "engine profile restricting what a document may contain and how large it may be: `full|article|comment|minimal` (default: off, the engine's full behavior). comment and minimal also cap the body at 100000 and 10000 bytes; an over-cap page is an error, never a blank page")
+	includes := fs.Bool("includes", false, "expand `{{ path }}` includes from disk, contained to -include-root")
+	includeRoot := fs.String("include-root", "", "absolute containment root for includes (default: the content `directory`). A relative value is refused, not resolved")
+	depsFile := fs.String("deps", "", "write the include dependencies of every page to this JSON `file`")
 	var symbolFiles repeatable
 	fs.Var(&symbolFiles, "symbols", "path to a JSON `file` mapping a symbol name to what :name: renders as (repeatable; merged left to right)")
 	var symbolPairs repeatable
@@ -83,32 +86,76 @@ func run(args []string, stdout, stderr *os.File) error {
 		return err
 	}
 
-	c := &converter{
-		contentDir: *contentDir,
-		outDir:     *outDir,
-		clean:      *clean,
-		quiet:      *quiet,
-		extensions: *extensions,
-		static:     *static,
-		safe:       *safe,
-		profile:    *profile,
-		symbols:    symbols,
-		log:        stdout,
+	// The DERIVED default is absolutized; a configured one is not. carve-go
+	// refuses a relative root, and that refusal is what keeps containment off
+	// the directory the build happened to run from - resolving a configured
+	// value here would disarm it. The default is this tool's own value, so
+	// there is nothing to disarm.
+	root := *includeRoot
+	if *includes && root == "" {
+		root, err = filepath.Abs(*contentDir)
+		if err != nil {
+			return fmt.Errorf("content directory %q: %w", *contentDir, err)
+		}
 	}
-	return c.walk()
+
+	c := &converter{
+		contentDir:  *contentDir,
+		outDir:      *outDir,
+		clean:       *clean,
+		quiet:       *quiet,
+		extensions:  *extensions,
+		static:      *static,
+		safe:        *safe,
+		profile:     *profile,
+		symbols:     symbols,
+		includes:    *includes,
+		includeRoot: root,
+		depsFile:    *depsFile,
+		log:         stdout,
+		warn:        stderr,
+	}
+	if err := c.walk(); err != nil {
+		return err
+	}
+	return c.writeDeps()
 }
 
 type converter struct {
-	contentDir string
-	outDir     string
-	clean      bool
-	quiet      bool
-	extensions bool
-	static     bool
-	safe       bool
-	profile    string
-	symbols    map[string]string
-	log        *os.File
+	contentDir  string
+	outDir      string
+	clean       bool
+	quiet       bool
+	extensions  bool
+	static      bool
+	safe        bool
+	profile     string
+	symbols     map[string]string
+	includes    bool
+	includeRoot string
+	depsFile    string
+	log         *os.File
+	warn        *os.File
+	deps        []pageDeps
+}
+
+// pageDeps is one page's entry in the -deps manifest.
+//
+// Hugo runs in a separate process and exposes no plugin API, so there is no
+// dependency tracker to call: this preprocessor writes what it read and leaves
+// the watching to whatever drives it.
+type pageDeps struct {
+	Page string `json:"page"`
+	// Targets are the host paths that were READ, which is the half of spec
+	// I11 this manifest can state completely.
+	Targets []string `json:"targets"`
+	// Unresolved holds the directives that did not resolve, as written. No
+	// host path was ever established for one, so it cannot be watched.
+	Unresolved []string `json:"unresolved,omitempty"`
+	// Incomplete says the engine's warning cap was reached, so Unresolved is a
+	// sample. A consumer seeing it rebuilds unconditionally rather than
+	// trusting this entry (markup-carve/carve-rs#1676).
+	Incomplete bool `json:"incomplete,omitempty"`
 }
 
 // symbolMap merges the symbol sources into the single map handed to the
@@ -260,16 +307,28 @@ func (c *converter) convertFile(src string) error {
 		return fmt.Errorf("read %q: %w", src, err)
 	}
 
-	res, err := convert.ConvertWithOptions(string(srcBytes), convert.Options{
+	opts := convert.Options{
 		Extensions: c.extensions,
 		Static:     c.static,
 		Safe:       c.safe,
 		Profile:    c.profile,
 		Symbols:    c.symbols,
-	})
+		Includes:   c.includes,
+	}
+	if c.includes {
+		absolute, err := filepath.Abs(src)
+		if err != nil {
+			return fmt.Errorf("resolve %q: %w", src, err)
+		}
+		opts.IncludeRoot = c.includeRoot
+		opts.SourcePath = absolute
+	}
+
+	res, err := convert.ConvertWithOptions(string(srcBytes), opts)
 	if err != nil {
 		return fmt.Errorf("convert %q: %w", src, err)
 	}
+	c.recordIncludes(src, res)
 
 	if dir := filepath.Dir(out); dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -281,6 +340,52 @@ func (c *converter) convertFile(src string) error {
 	}
 	if !c.quiet {
 		fmt.Fprintf(c.log, "  - %s -> %s\n", src, out)
+	}
+	return nil
+}
+
+// recordIncludes reports what expansion degraded and remembers what it read.
+//
+// The warning is the engine's, unchanged: a refusal and a missing file both
+// report include-unresolved so a rendered page cannot report the difference
+// (spec I7).
+func (c *converter) recordIncludes(src string, res convert.Result) {
+	if !c.includes {
+		return
+	}
+	for _, w := range res.Warnings {
+		fmt.Fprintf(c.warn, "hugo-carve: %s: %s: %s\n", src, w.Rule, w.Message)
+	}
+	if res.SuppressedWarnings > 0 {
+		fmt.Fprintf(c.warn, "hugo-carve: %s: %d further include warnings suppressed; rebuild unconditionally\n",
+			src, res.SuppressedWarnings)
+	}
+	entry := pageDeps{Page: src, Targets: []string{}, Incomplete: res.SuppressedWarnings > 0}
+	for _, d := range res.Dependencies {
+		if d.Resolved {
+			entry.Targets = append(entry.Targets, d.Path)
+			continue
+		}
+		entry.Unresolved = append(entry.Unresolved, d.Path)
+	}
+	c.deps = append(c.deps, entry)
+}
+
+// writeDeps writes the manifest, when one was asked for.
+func (c *converter) writeDeps() error {
+	if c.depsFile == "" {
+		return nil
+	}
+	pages := c.deps
+	if pages == nil {
+		pages = []pageDeps{}
+	}
+	encoded, err := json.MarshalIndent(pages, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode dependencies: %w", err)
+	}
+	if err := os.WriteFile(c.depsFile, append(encoded, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write %q: %w", c.depsFile, err)
 	}
 	return nil
 }

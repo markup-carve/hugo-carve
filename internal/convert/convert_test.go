@@ -519,3 +519,27 @@ func TestConvertWithOptions_SafeDoesNotConstrainSymbols(t *testing.T) {
 		t.Errorf("a symbol value is trusted configuration and stays raw under Safe, got:\n%s", res.BodyHTML)
 	}
 }
+
+// A brace-balanced leading block is not automatically JSON front matter.
+// `{{ path }}` balances, so a page opening with an include directive and no
+// front matter had its whole body read as front matter and rendered to nothing.
+func TestSplitFrontMatter_ABalancedNonJSONBlockIsBody(t *testing.T) {
+	fm, body := splitFrontMatter("{{ sub/frag.crv }}\n\ntext\n")
+	if fm != "" {
+		t.Errorf("expected no front matter, got %q", fm)
+	}
+	if !strings.HasPrefix(body, "{{ sub/frag.crv }}") {
+		t.Errorf("expected the directive in the body, got %q", body)
+	}
+}
+
+// The JSON form still works, so the check narrows nothing a site relies on.
+func TestSplitFrontMatter_RealJSONIsStillFrontMatter(t *testing.T) {
+	fm, body := splitFrontMatter("{\n  \"title\": \"T\"\n}\n\ntext\n")
+	if !strings.Contains(fm, "\"title\"") {
+		t.Errorf("expected JSON front matter, got %q", fm)
+	}
+	if !strings.Contains(body, "text") {
+		t.Errorf("expected the body, got %q", body)
+	}
+}
