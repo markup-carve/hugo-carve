@@ -1,7 +1,7 @@
 name: Engine drift
 
 # This repo renders with an engine it never builds, two pins deep and both
-# invisible from here: go.mod pins a carve-go pseudo-version, and that carve-go
+# invisible from here: go.mod pins a carve-go version, and that carve-go
 # embeds a prebuilt `.wasm` compiled from some carve-rs commit. Neither moves on
 # its own, and until this file existed nothing here compared either to anything
 # (carve#735).
@@ -72,6 +72,8 @@ jobs:
           repository: markup-carve/carve-go
           path: carve-go
           fetch-depth: 0
+          # go.mod pins a release tag, and resolving it needs the tag here.
+          fetch-tags: true
 
       - name: Check out carve-rs
         uses: actions/checkout@v4
@@ -94,12 +96,17 @@ jobs:
           fi
           echo "go.mod requires ${version}"
 
-          # A pseudo-version ends in -<12-hex>; a tagged release does not, and
-          # carve-go has never tagged one, so anything else here is a surprise
-          # worth failing on rather than guessing about.
-          rev="${version##*-}"
-          if ! printf '%s' "${rev}" | grep -qE '^[0-9a-f]{12}$'; then
-            echo "::error::${version} does not end in a 12-hex pseudo-version revision, so the commit it came from cannot be identified"
+          # Two spellings reach here. A pseudo-version ends in -<12-hex> and
+          # carries its own commit; a release tag does not, and has to be
+          # resolved against the carve-go checkout before anything below can
+          # ask where it sits.
+          candidate="${version##*-}"
+          if printf '%s' "${candidate}" | grep -qE '^[0-9a-f]{12}$'; then
+            rev="${candidate}"
+          elif rev="$(git -C carve-go rev-parse -q --verify "refs/tags/${version}^{commit}")"; then
+            echo "go.mod pins tag ${version}, which is carve-go ${rev}"
+          else
+            echo "::error::${version} is neither a 12-hex pseudo-version revision nor a tag in markup-carve/carve-go, so the commit it came from cannot be identified"
             exit 1
           fi
           if ! git -C carve-go cat-file -e "${rev}^{commit}" 2>/dev/null; then
