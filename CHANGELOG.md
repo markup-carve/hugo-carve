@@ -7,14 +7,15 @@ links `carve-go`, and `carve-go` embeds a prebuilt WebAssembly module compiled
 from `carve-rs`. An engine change can therefore alter output with no diff here,
 so engine pin moves get an entry of their own.
 
-## Unreleased
+## v0.1.1 - 2026-09-21
 
 ### Added
 
 - `--includes` expands `{{ path }}` directives from disk, contained to
   `--include-root` (default: the content directory). Off by default.
+  A relative `--include-root` resolves against the working directory.
   `--deps FILE` writes what each page read, for a build that needs to know when
-  to run again. markup-carve/hugo-carve#27
+  to run again. markup-carve/hugo-carve#27, markup-carve/hugo-carve#30
 
 ### Fixed
 
@@ -25,9 +26,8 @@ so engine pin moves get an entry of their own.
 
 ### Changed
 
-- The carve-go pin moves to `main` (v0.1.3-0.20260916042933-d83559d6103b), which
-  is the revision exposing `RenderWithIncludes` and the rebuilt WASI artifact
-  behind it.
+- Requires carve-go v0.1.3, the release exposing `RenderWithIncludes` and the
+  WASI artifact rebuilt from carve-rs 0.1.6. markup-carve/hugo-carve#32
 
 ## v0.1.0 - 2026-09-09
 
