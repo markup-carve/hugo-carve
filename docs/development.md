@@ -13,7 +13,7 @@ Do not commit the local `replace`. Published code uses the released version
 pinned by `go.mod`:
 
 ```
-require github.com/markup-carve/carve-go v0.1.2
+require github.com/markup-carve/carve-go v0.1.3
 ```
 
 Run the tests:
