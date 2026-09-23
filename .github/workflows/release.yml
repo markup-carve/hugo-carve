@@ -1,0 +1,170 @@
+name: Release
+
+# Go modules have no registry step: the module proxy serves them straight from
+# the git tag, so pushing the tag IS the publish and nothing here can gate it.
+# What this workflow gates is everything that is still in its own hands - that
+# the tag agrees with the CHANGELOG, that a human wrote release notes, and that
+# the tagged tree builds and passes its tests - and then it does the one thing
+# that was being done by hand: publish the notes.
+#
+# v0.1.1 was tagged with no workflow in the repository at all. Nothing ran, and
+# its release had to be published by hand.
+
+on:
+  push:
+    tags:
+      # `v`-prefixed, because Go REQUIRES it: a module version without the `v`
+      # is not a version the proxy will serve.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      # `write`, not `read`, for two reasons. It is what publishes the release
+      # at the end, and a DRAFT release is invisible to a caller without push
+      # access - so under `contents: read` the listing comes back without it
+      # and the gate below reports "no release" for a draft sitting right there
+      # with notes in it. See markup-carve/carve-wasm#80.
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # So the ancestry check below has main to compare against.
+          fetch-depth: 0
+
+      - name: Verify the release tag is on main
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::release tag $GITHUB_REF_NAME is not on the main line"
+            exit 1
+          fi
+
+      # GATE: the tag and the CHANGELOG agree.
+      #
+      # There is no version constant anywhere in this repository - no `-version`
+      # flag, no `const Version`, nothing in go.mod - so the tag is the only
+      # version surface, and the CHANGELOG heading is the only other place the
+      # number is written down. This is the whole of the version check that
+      # sibling repositories spend two steps on.
+      #
+      # The pattern accepts this repository's own `## v0.1.1 - <date>` form as
+      # well as the bracketed `## [0.1.1]` the other repositories use, rather
+      # than imposing one on the other. The trailing class rejects a longer
+      # number, so a 0.1.1 tag is not satisfied by a 0.1.11 section.
+      - name: The CHANGELOG has a section for this tag
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          if ! grep -qE "^## \[?v?${ver//./\\.}\]?([^0-9.]|$)" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $ver; cut it before tagging"
+            exit 1
+          fi
+          grep -m1 -E "^## \[?v?${ver//./\\.}\]?([^0-9.]|$)" CHANGELOG.md
+
+      # GATE: the notes are not the workflow's to write. A CHANGELOG entry is
+      # deliberately one or two lines for a contributor, which makes poor
+      # release notes for a reader deciding whether to upgrade. A human writes
+      # the draft first and this refuses to publish without one.
+      #
+      # Found by listing rather than `gh release view <tag>`: a draft's tag is
+      # not a git ref, so addressing one by tag can match nothing, change
+      # nothing and still exit 0.
+      - name: A release draft for this tag exists and has notes
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Slurped with `jq -s`, not with `gh --jq`: `gh api --paginate`
+          # applies its own `--jq` to EACH PAGE, so past one page of releases
+          # the filter emits one result per page instead of one result.
+          release="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            | jq -s --arg tag "$GITHUB_REF_NAME" \
+                '[.[][] | select(.tag_name == $tag)] | first')"
+          if [ -z "$release" ] || [ "$release" = "null" ]; then
+            echo "::error::no release for $GITHUB_REF_NAME. Write the notes first:" \
+                 "gh release create $GITHUB_REF_NAME --draft --notes-file NOTES.md"
+            echo "::error::if a draft DOES exist, this job could not see it -" \
+                 "check that the job still declares contents: write"
+            exit 1
+          fi
+          body="$(printf '%s' "$release" | jq -r '.body // ""' | tr -d '[:space:]')"
+          [ -n "$body" ] \
+            || { echo "::error::the release for $GITHUB_REF_NAME has no notes"; exit 1; }
+          printf '%s' "$release" | jq -r '"draft=\(.draft) tag=\(.tag_name)"'
+          printf '%s' "$release" | jq -er '.id' > "$RUNNER_TEMP/release-id"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Build
+        run: go build ./...
+
+      # The same command ci.yml's build-test job runs, and deliberately without
+      # CARVE_SPEC_CORPUS. The corpus job gates on the DIFFERENCE between the
+      # pinned carve-go and carve-go main, which is a moving external target: a
+      # tag that was fine an hour ago would start failing on an upstream commit
+      # nobody here pushed. A gate that a release cannot clear by its own
+      # contents gets switched off, which is how checks go dead
+      # (markup-carve/carve#755). Drift stays in ci.yml and engine-drift.yml,
+      # where a pull request can act on it.
+      - name: Test
+        run: go test ./...
+
+      # The manual step tonight's release round exposed. A tag with no release
+      # page gives a reader no notes and no changelog for the version they just
+      # got from the proxy.
+      #
+      # Last, deliberately: a draft that stays a draft is recoverable.
+      - name: Publish the release notes
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id="$(cat "$RUNNER_TEMP/release-id")"
+          case "$id" in
+            ''|*[!0-9]*) echo "::error::release id is not a number: [$id]"; exit 1 ;;
+          esac
+          # `tag_name` goes with every PATCH of a release. Omit it on a DRAFT
+          # and GitHub replaces the tag with a generated `untagged-*`
+          # placeholder, because a draft's tag is a string on the object rather
+          # than a git ref - so the field has nothing to fall back to.
+          #
+          # `-F` (not `-f`) for draft, so it is sent as a real boolean.
+          # `-f draft=true` sends the STRING "true", which reads as false and
+          # PUBLISHES the release; that is how a carve-php release went public
+          # for 90 seconds.
+          gh api "repos/$GITHUB_REPOSITORY/releases/$id" -X PATCH \
+            -f tag_name="$GITHUB_REF_NAME" -F draft=false --jq '"published \(.tag_name)"'
+          # Read it back: exit status does not tell you whether the tag survived.
+          gh api "repos/$GITHUB_REPOSITORY/releases/$id" \
+            --jq '"draft=\(.draft) tag=\(.tag_name)"'
+
+      # Not a gate - a warm-up that reports. The proxy populates a version
+      # lazily, on the first fetch of it, so this both answers "does the module
+      # resolve at this tag" and makes the first `go get` someone runs fast
+      # instead of cold. Because population is lazy it can also lag, and a cold
+      # proxy must not fail a release that is otherwise finished: the step
+      # retries and then reports either way.
+      - name: Warm the Go module proxy
+        if: github.event_name != 'workflow_dispatch'
+        continue-on-error: true
+        run: |
+          url="https://proxy.golang.org/github.com/markup-carve/hugo-carve/@v/${GITHUB_REF_NAME}.info"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 30 "$url"; then
+              echo
+              echo "the proxy serves $GITHUB_REF_NAME"
+              exit 0
+            fi
+            echo "attempt $attempt: the proxy does not serve $GITHUB_REF_NAME yet"
+            sleep 20
+          done
+          echo "::warning::the proxy did not serve $GITHUB_REF_NAME within about two minutes." \
+               "This does not invalidate the release - population is lazy and the next" \
+               "go get triggers it."
