@@ -18,9 +18,12 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
 
+# Each job declares timeout-minutes so a hung step fails fast
+# instead of inheriting the 360-minute GitHub default.
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       # `write`, not `read`, for two reasons. It is what publishes the release
       # at the end, and a DRAFT release is invisible to a caller without push
