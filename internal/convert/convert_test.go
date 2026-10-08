@@ -148,7 +148,7 @@ func TestConvert_LeadingBraceIsBodyNotFrontMatter(t *testing.T) {
 // and the callout list below the block becomes an <ol class="callouts">.
 func TestCarveGo_CodeCallouts(t *testing.T) {
 	src := "```go\nx := 1 // <1>\ny := 2 // <2>\n```\n\n<1> assign x\n<2> assign y\n"
-	html, err := carve.ToHTMLOptions(src, carve.Options{Extensions: []string{"all"}})
+	html, err := carve.ToHTMLOptions(src, carve.Options{Extensions: bundleExtensions()})
 	if err != nil {
 		t.Fatalf("ToHTMLOptions error: %v", err)
 	}

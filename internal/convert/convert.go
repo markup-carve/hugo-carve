@@ -176,9 +176,11 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 	fm, body := splitFrontMatter(source)
 
 	carveOpts := carve.Options{Static: opts.Static, Safe: opts.Safe, Profile: opts.Profile, Symbols: opts.Symbols}
-	if opts.Extensions || opts.Static {
-		// carve-go enables the full bundle for any non-empty slice.
-		carveOpts.Extensions = []string{"all"}
+	if opts.Extensions {
+		// carve-go v0.1.5 selects by registry key, one --extension per
+		// element, so the whole bundle has to be named. Static with no
+		// selection already implies the bundle and is left alone.
+		carveOpts.Extensions = bundleExtensions()
 	}
 
 	var (

@@ -7,6 +7,24 @@ links `carve-go`, and `carve-go` embeds a prebuilt WebAssembly module compiled
 from `carve-rs`. An engine change can therefore alter output with no diff here,
 so engine pin moves get an entry of their own.
 
+## [Unreleased]
+
+### Fixed
+
+- `--extensions` and `--static` render again. carve-go v0.1.5 selects
+  extensions by registry key and refuses the name `all`, which this package
+  sent, so either flag failed every page outright instead of enabling anything.
+  markup-carve/hugo-carve#37
+
+### Changed
+
+- Requires carve-go v0.1.5, whose embedded engine moves from carve-rs 0.1.6 to
+  0.1.8. Measured against the spec corpus at 0.1.8: 204 of 2223 documents
+  rendered differently on the previous pin, 0 on this one. The change a page
+  shows most directly is exact-case name lookup: a cross-reference whose case
+  does not match its target now renders as literal text instead of linking to
+  the differently-cased id. markup-carve/hugo-carve#37
+
 ## v0.1.1 - 2026-09-21
 
 ### Added
