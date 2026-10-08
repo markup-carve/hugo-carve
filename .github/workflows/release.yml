@@ -1,4 +1,4 @@
-name: Release packages and assets
+name: Release
 
 # Go modules have no registry step: the module proxy serves them straight from
 # the git tag, so pushing the tag IS the publish and nothing here can gate it.
@@ -11,31 +11,16 @@ name: Release packages and assets
 # its release had to be published by hand.
 
 on:
-  workflow_call:
+  push:
+    tags:
+      # `v`-prefixed, because Go REQUIRES it: a module version without the `v`
+      # is not a version the proxy will serve.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
     inputs:
-      publish:
-        required: true
-        type: boolean
-      tag:
-        required: true
-        type: string
       version:
-        required: true
-        type: string
-      release_tag:
-        required: true
-        type: string
-      source_sha:
-        required: true
-        type: string
-      release_id:
-        required: true
-        type: string
-      release_body:
-        required: true
-        type: string
-      notes_digest:
-        required: true
+        description: Version to publish; leave empty for rehearsal
+        required: false
         type: string
 
 # Each job declares timeout-minutes so a hung step fails fast
@@ -51,39 +36,18 @@ jobs:
       # and the gate below reports "no release" for a draft sitting right there
       # with notes in it. See markup-carve/carve-wasm#80.
       contents: write
-      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
           # So the ancestry check below has main to compare against.
           fetch-depth: 0
 
-          ref: ${{ inputs.source_sha }}
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Verify approval and checked tag before publishing
-        working-directory: ${{ github.workspace }}
-        if: ${{ inputs.publish }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
-          RELEASE_SHA: ${{ inputs.source_sha }}
-          RELEASE_NOTES_DIGEST: ${{ inputs.notes_digest }}
-        run: python .github/scripts/release-lane.py permit
-      - name: Expose the candidate tag locally
-        if: ${{ !inputs.publish }}
-        shell: bash
-        env:
-          CANDIDATE_TAG: ${{ inputs.tag }}
-        run: |
-          git tag "$CANDIDATE_TAG" "${{ inputs.source_sha }}"
       - name: Verify the release tag is on main
+        if: (github.event_name != 'workflow_dispatch' || inputs.version != '')
         run: |
           git fetch origin main
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::release tag $LANE_TAG is not on the main line"
+            echo "::error::release tag $RELEASE_TAG is not on the main line"
             exit 1
           fi
 
@@ -100,8 +64,9 @@ jobs:
       # than imposing one on the other. The trailing class rejects a longer
       # number, so a 0.1.1 tag is not satisfied by a 0.1.11 section.
       - name: The CHANGELOG has a section for this tag
+        if: (github.event_name != 'workflow_dispatch' || inputs.version != '')
         run: |
-          ver="${LANE_TAG#v}"
+          ver="${RELEASE_TAG#v}"
           if ! grep -qE "^## \[?v?${ver//./\\.}\]?([^0-9.]|$)" CHANGELOG.md; then
             echo "::error::CHANGELOG.md has no section for $ver; cut it before tagging"
             exit 1
@@ -117,6 +82,7 @@ jobs:
       # not a git ref, so addressing one by tag can match nothing, change
       # nothing and still exit 0.
       - name: A release draft for this tag exists and has notes
+        if: (github.event_name != 'workflow_dispatch' || inputs.version != '')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -124,22 +90,21 @@ jobs:
           # applies its own `--jq` to EACH PAGE, so past one page of releases
           # the filter emits one result per page instead of one result.
           release="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
-            | jq -s --arg tag "$LANE_TAG" \
+            | jq -s --arg tag "$RELEASE_TAG" \
                 '[.[][] | select(.tag_name == $tag)] | first')"
           if [ -z "$release" ] || [ "$release" = "null" ]; then
-            echo "::error::no release for $LANE_TAG. Write the notes first:" \
-                 "gh release create $LANE_TAG --draft --notes-file NOTES.md"
+            echo "::error::no release for $RELEASE_TAG. Write the notes first:" \
+                 "gh release create $RELEASE_TAG --draft --notes-file NOTES.md"
             echo "::error::if a draft DOES exist, this job could not see it -" \
                  "check that the job still declares contents: write"
             exit 1
           fi
           body="$(printf '%s' "$release" | jq -r '.body // ""' | tr -d '[:space:]')"
           [ -n "$body" ] \
-            || { echo "::error::the release for $LANE_TAG has no notes"; exit 1; }
+            || { echo "::error::the release for $RELEASE_TAG has no notes"; exit 1; }
           printf '%s' "$release" | jq -r '"draft=\(.draft) tag=\(.tag_name)"'
           printf '%s' "$release" | jq -er '.id' > "$RUNNER_TEMP/release-id"
 
-        if: ${{ inputs.publish }}
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -164,29 +129,66 @@ jobs:
       # got from the proxy.
       #
       # Last, deliberately: a draft that stays a draft is recoverable.
+      - name: Create the release tag after approval
+        if: github.event_name == 'workflow_dispatch' && inputs.version != ''
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            remote="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" | tail -1 | cut -f1)"
+            [ "$remote" = "$GITHUB_SHA" ] || { echo "::error::Existing tag points to another commit"; exit 1; }
+          else
+            git tag "$RELEASE_TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
+      - name: Publish the release notes
+        if: (github.event_name != 'workflow_dispatch' || inputs.version != '')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id="$(cat "$RUNNER_TEMP/release-id")"
+          case "$id" in
+            ''|*[!0-9]*) echo "::error::release id is not a number: [$id]"; exit 1 ;;
+          esac
+          # `tag_name` goes with every PATCH of a release. Omit it on a DRAFT
+          # and GitHub replaces the tag with a generated `untagged-*`
+          # placeholder, because a draft's tag is a string on the object rather
+          # than a git ref - so the field has nothing to fall back to.
+          #
+          # `-F` (not `-f`) for draft, so it is sent as a real boolean.
+          # `-f draft=true` sends the STRING "true", which reads as false and
+          # PUBLISHES the release; that is how a carve-php release went public
+          # for 90 seconds.
+          gh api "repos/$GITHUB_REPOSITORY/releases/$id" -X PATCH \
+            -f tag_name="$RELEASE_TAG" -F draft=false --jq '"published \(.tag_name)"'
+          # Read it back: exit status does not tell you whether the tag survived.
+          gh api "repos/$GITHUB_REPOSITORY/releases/$id" \
+            --jq '"draft=\(.draft) tag=\(.tag_name)"'
+
+      # Not a gate - a warm-up that reports. The proxy populates a version
+      # lazily, on the first fetch of it, so this both answers "does the module
+      # resolve at this tag" and makes the first `go get` someone runs fast
+      # instead of cold. Because population is lazy it can also lag, and a cold
+      # proxy must not fail a release that is otherwise finished: the step
+      # retries and then reports either way.
       - name: Warm the Go module proxy
+        if: (github.event_name != 'workflow_dispatch' || inputs.version != '')
         continue-on-error: true
         run: |
-          url="https://proxy.golang.org/github.com/markup-carve/hugo-carve/@v/${LANE_TAG}.info"
+          url="https://proxy.golang.org/github.com/markup-carve/hugo-carve/@v/${RELEASE_TAG}.info"
           for attempt in 1 2 3 4 5; do
             if curl -fsS --max-time 30 "$url"; then
               echo
-              echo "the proxy serves $LANE_TAG"
+              echo "the proxy serves $RELEASE_TAG"
               exit 0
             fi
-            echo "attempt $attempt: the proxy does not serve $LANE_TAG yet"
+            echo "attempt $attempt: the proxy does not serve $RELEASE_TAG yet"
             sleep 20
           done
-          echo "::warning::the proxy did not serve $LANE_TAG within about two minutes." \
+          echo "::warning::the proxy did not serve $RELEASE_TAG within about two minutes." \
                "This does not invalidate the release - population is lazy and the next" \
                "go get triggers it."
-        if: ${{ inputs.publish }}
-permissions:
-  contents: write
-  actions: read
-  id-token: write
+    environment: release-approval
 env:
-  LANE_TAG: ${{ inputs.tag }}
-  LANE_REF: ${{ format('refs/tags/{0}', inputs.tag) }}
-  LANE_REF_TYPE: tag
-  LANE_PUBLISH: ${{ inputs.publish }}
+  RELEASE_VERSION: ${{ inputs.version }}
+  RELEASE_TAG: ${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref_name }}
