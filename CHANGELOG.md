@@ -9,6 +9,8 @@ so engine pin moves get an entry of their own.
 
 ## [Unreleased]
 
+## v0.1.2 - 2026-10-08
+
 ### Fixed
 
 - `--extensions` and `--static` render again. carve-go v0.1.5 selects
