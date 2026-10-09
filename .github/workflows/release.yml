@@ -9,6 +9,13 @@ name: Release
 #
 # v0.1.1 was tagged with no workflow in the repository at all. Nothing ran, and
 # its release had to be published by hand.
+#
+# All of it used to sit in ONE job carrying `environment: release-approval`, and
+# that is the shape this file was rewritten to get rid of: GitHub holds a gated
+# job BEFORE its first step, so the reviewer was asked to approve a run that had
+# checked nothing at all, and the ancestry, changelog, notes, build and test
+# steps then ran on the far side of the approval, in the same job that creates
+# the tag. Split into gates, one approval, the tag, and the notes.
 
 on:
   push:
@@ -26,16 +33,12 @@ on:
 # Each job declares timeout-minutes so a hung step fails fast
 # instead of inheriting the 360-minute GitHub default.
 jobs:
-  release:
+  # THE GATES. Neither carries `environment:`, so neither asks for an approval:
+  # they run first, and the `tag` job below needs both.
+  guard:
+    name: The tag, the CHANGELOG and the tests agree
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      # `write`, not `read`, for two reasons. It is what publishes the release
-      # at the end, and a DRAFT release is invisible to a caller without push
-      # access - so under `contents: read` the listing comes back without it
-      # and the gate below reports "no release" for a draft sitting right there
-      # with notes in it. See markup-carve/carve-wasm#80.
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,15 +76,61 @@ jobs:
           fi
           grep -m1 -E "^## \[?v?${ver//./\\.}\]?([^0-9.]|$)" CHANGELOG.md
 
+      # The module proxy serves a Go module straight from the git tag, so the
+      # tag IS the publish and it cannot be withdrawn. A tag that already exists
+      # is therefore the one thing worth refusing first.
+      - name: The tag does not exist yet
+        if: github.event_name == 'workflow_dispatch' && inputs.version != ''
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            remote="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" | tail -1 | cut -f1)"
+            if [ "$remote" != "$GITHUB_SHA" ]; then
+              echo "::error::$RELEASE_TAG already exists and points at $remote, not at this commit."
+              echo "::error::The proxy serves a version forever; supersede it with a new one."
+              exit 1
+            fi
+            echo "$RELEASE_TAG already points at this commit; the tag job will create nothing."
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Build
+        run: go build ./...
+
+      # The same command ci.yml's build-test job runs, and deliberately without
+      # CARVE_SPEC_CORPUS. The corpus job gates on the DIFFERENCE between the
+      # pinned carve-go and carve-go main, which is a moving external target: a
+      # tag that was fine an hour ago would start failing on an upstream commit
+      # nobody here pushed. A gate that a release cannot clear by its own
+      # contents gets switched off, which is how checks go dead
+      # (markup-carve/carve#755). Drift stays in ci.yml and engine-drift.yml,
+      # where a pull request can act on it.
+      - name: Test
+        run: go test ./...
+
+  release-notes:
+    name: A release draft for this tag exists and has notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # `write`, not `read`: a DRAFT release is invisible to a caller without
+      # push access, so under `contents: read` the listing comes back without it
+      # and this reports "no release" for a draft sitting right there with notes
+      # in it. See markup-carve/carve-wasm#80.
+      contents: write
+    steps:
       # GATE: the notes are not the workflow's to write. A CHANGELOG entry is
       # deliberately one or two lines for a contributor, which makes poor
       # release notes for a reader deciding whether to upgrade. A human writes
-      # the draft first and this refuses to publish without one.
+      # the draft first and this refuses to release without one.
       #
       # Found by listing rather than `gh release view <tag>`: a draft's tag is
       # not a git ref, so addressing one by tag can match nothing, change
       # nothing and still exit 0.
-      - name: A release draft for this tag exists and has notes
+      - name: The draft exists and has notes
         if: (github.event_name != 'workflow_dispatch' || inputs.version != '')
         env:
           GH_TOKEN: ${{ github.token }}
@@ -103,32 +152,41 @@ jobs:
           [ -n "$body" ] \
             || { echo "::error::the release for $RELEASE_TAG has no notes"; exit 1; }
           printf '%s' "$release" | jq -r '"draft=\(.draft) tag=\(.tag_name)"'
-          printf '%s' "$release" | jq -er '.id' > "$RUNNER_TEMP/release-id"
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+  # THE TAG IS CREATED HERE, after the gates pass and after a human approves.
+  # Pushing the tag IS the publish for a Go module - the proxy serves it from
+  # the git ref with no registry step in between - so it is the first and only
+  # irreversible act, and it is the one thing the approval has to sit in front
+  # of.
+  #
+  # This is also the ONLY job carrying `environment:`. GitHub prompts once per
+  # gated job, so a second one would ask twice for one decision, and the second
+  # prompt would arrive after the tag already existed.
+  tag:
+    name: Create the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [guard, release-notes]
+    environment: release-approval
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
         with:
-          go-version: 'stable'
+          fetch-depth: 0
 
-      - name: Build
-        run: go build ./...
+      # Re-checked under the approval: main can move while a run waits for a
+      # reviewer, and the gates measured the commit that was current then.
+      - name: The CHANGELOG still has a section for this tag
+        if: (github.event_name != 'workflow_dispatch' || inputs.version != '')
+        run: |
+          ver="${RELEASE_TAG#v}"
+          if ! grep -qE "^## \[?v?${ver//./\\.}\]?([^0-9.]|$)" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md no longer has a section for $ver. main moved" \
+                 "while this run waited for approval. Re-run the workflow."
+            exit 1
+          fi
 
-      # The same command ci.yml's build-test job runs, and deliberately without
-      # CARVE_SPEC_CORPUS. The corpus job gates on the DIFFERENCE between the
-      # pinned carve-go and carve-go main, which is a moving external target: a
-      # tag that was fine an hour ago would start failing on an upstream commit
-      # nobody here pushed. A gate that a release cannot clear by its own
-      # contents gets switched off, which is how checks go dead
-      # (markup-carve/carve#755). Drift stays in ci.yml and engine-drift.yml,
-      # where a pull request can act on it.
-      - name: Test
-        run: go test ./...
-
-      # The manual step tonight's release round exposed. A tag with no release
-      # page gives a reader no notes and no changelog for the version they just
-      # got from the proxy.
-      #
-      # Last, deliberately: a draft that stays a draft is recoverable.
       - name: Create the release tag after approval
         if: github.event_name == 'workflow_dispatch' && inputs.version != ''
         run: |
@@ -141,12 +199,32 @@ jobs:
             git tag "$RELEASE_TAG" "$GITHUB_SHA"
             git push origin "refs/tags/$RELEASE_TAG"
           fi
+
+  # Runs in THIS run rather than on the new tag, because a ref created with
+  # github.token triggers no other workflow - a tag-triggered job here would
+  # simply never fire.
+  publish-notes:
+    name: Publish the release notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [tag]
+    permissions:
+      contents: write
+    steps:
+      # The manual step tonight's release round exposed. A tag with no release
+      # page gives a reader no notes and no changelog for the version they just
+      # got from the proxy.
+      #
+      # The release id is looked up here rather than carried over from the gate:
+      # a file under RUNNER_TEMP does not cross a job boundary.
       - name: Publish the release notes
         if: (github.event_name != 'workflow_dispatch' || inputs.version != '')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          id="$(cat "$RUNNER_TEMP/release-id")"
+          id="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            | jq -s --arg tag "$RELEASE_TAG" \
+                '[.[][] | select(.tag_name == $tag)] | first | .id // empty' | tr -d '"')"
           case "$id" in
             ''|*[!0-9]*) echo "::error::release id is not a number: [$id]"; exit 1 ;;
           esac
@@ -188,7 +266,7 @@ jobs:
           echo "::warning::the proxy did not serve $RELEASE_TAG within about two minutes." \
                "This does not invalidate the release - population is lazy and the next" \
                "go get triggers it."
-    environment: release-approval
+
 env:
   RELEASE_VERSION: ${{ inputs.version }}
   RELEASE_TAG: ${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref_name }}
