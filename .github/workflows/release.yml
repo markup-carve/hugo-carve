@@ -18,11 +18,6 @@ name: Release
 # the tag. Split into gates, one approval, the tag, and the notes.
 
 on:
-  push:
-    tags:
-      # `v`-prefixed, because Go REQUIRES it: a module version without the `v`
-      # is not a version the proxy will serve.
-      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
       version:
