@@ -57,10 +57,7 @@ var compareMarkerRun = regexp.MustCompile(`^:{3,}`)
 // pages tests/corpus is generated from. corpusDir is CARVE_SPEC_CORPUS, i.e.
 // <spec>/tests/corpus.
 //
-// The scan mirrors the generator's state machine rather than grepping: a
-// `::: compare` line inside an already-open compare block is content, not a
-// second pair, and the generator closes a block on a bare marker line.
-// Mirroring keeps the two counts equal by construction instead of by luck.
+// Every `carve` fence inside a compare block is one pair; a block may hold several.
 func declaredCorpusSize(t *testing.T, corpusDir string) int {
 	t.Helper()
 	examplesDir := filepath.Join(corpusDir, "..", "..", "resources", "examples")
@@ -76,29 +73,46 @@ func declaredCorpusSize(t *testing.T, corpusDir string) int {
 			t.Fatalf("no corpus source page at %s: %v. tests/corpus is generated from these pages; "+
 				"if the spec moved them, this helper has to move with them", path, err)
 		}
-		inCompare := false
-		marker := ""
-		for _, line := range strings.Split(string(blob), "\n") {
-			trimmed := strings.TrimSpace(line)
-			if inCompare {
-				if trimmed == marker {
-					inCompare = false
-					marker = ""
-				}
-				continue
-			}
-			if compareOpenLine.MatchString(trimmed) {
-				declared++
-				inCompare = true
-				marker = compareMarkerRun.FindString(trimmed)
-			}
-		}
+		declared += countDeclaredPairs(strings.Split(string(blob), "\n"))
 	}
 	if declared == 0 {
 		t.Fatalf("the corpus source pages under %s declare no ::: compare blocks at all; "+
 			"this is a wiring problem, not a corpus of size zero", examplesDir)
 	}
 	return declared
+}
+
+// countDeclaredPairs ports the spec's scripts/lib/example-pair-census.mjs.
+// Nothing inside an open fence is markup, so a ```` example holding a
+// ``` carve line declares no pair of its own.
+func countDeclaredPairs(lines []string) int {
+	pairs := 0
+	marker, fence := "", ""
+	for _, line := range lines {
+		if fence != "" {
+			if strings.HasPrefix(line, fence) && strings.TrimSpace(line[len(fence):]) == "" {
+				fence = ""
+			}
+			continue
+		}
+		ticks := len(line) - len(strings.TrimLeft(line, "`"))
+		if ticks >= 3 {
+			fence = line[:ticks]
+			if marker != "" && strings.TrimSpace(line[ticks:]) == "carve" {
+				pairs++
+			}
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		if marker == "" {
+			if compareOpenLine.MatchString(trimmed) {
+				marker = compareMarkerRun.FindString(trimmed)
+			}
+		} else if trimmed == marker {
+			marker = ""
+		}
+	}
+	return pairs
 }
 
 // requireWholeCorpus is the only place this package decides whether a corpus
@@ -113,10 +127,24 @@ func requireWholeCorpus(t *testing.T, corpusDir string, got int, what string) {
 	declared := declaredCorpusSize(t, corpusDir)
 	if got != declared {
 		t.Fatalf("%s: %d, but the spec's example pages declare %d. Every ::: compare block in "+
-			"resources/examples/{core,extensions,edge-cases}.md becomes one corpus pair, so a difference "+
+			"resources/examples/{core,extensions,edge-cases}.md yields one corpus pair per carve fence, so a difference "+
 			"means the corpus at %s is not the one those pages describe - a truncated or stale "+
 			"checkout, a wrong CARVE_SPEC_CORPUS, or a corpus that needs regenerating "+
 			"(npm run corpus:build in the spec repository). It does not mean this run was clean.",
 			what, got, declared, corpusDir)
+	}
+}
+
+func TestDeclaredPairsCountEveryCarveFenceInABlock(t *testing.T) {
+	page := strings.Join([]string{
+		"::: compare",
+		"```carve", "one", "```", "```html", "<p>one</p>", "```",
+		"````carve", "```carve", "nested, not a pair", "```", "````", "```html", "<pre>two</pre>", "```",
+		"```carve", "three", "```", "```html", "<p>three</p>", "```",
+		":::",
+		"```carve", "outside any block", "```",
+	}, "\n")
+	if got := countDeclaredPairs(strings.Split(page, "\n")); got != 3 {
+		t.Fatalf("got %d pairs, want 3", got)
 	}
 }
