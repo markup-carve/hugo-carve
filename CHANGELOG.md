@@ -9,6 +9,16 @@ so engine pin moves get an entry of their own.
 
 ## [Unreleased]
 
+## v0.1.3 - 2026-10-14
+
+### Changed
+
+- Require carve-go v0.1.6, which embeds the carve-rs 0.1.9 engine. Rendered
+  documents inherit its table, list, include and import fixes.
+- Corpus population checks count every Carve fence in a comparison block,
+  including blocks that contain more than one case.
+
+
 ## v0.1.2 - 2026-10-08
 
 ### Fixed
