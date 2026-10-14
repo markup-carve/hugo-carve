@@ -235,7 +235,8 @@ With `--safe`:
 
 ```html
 <p>Before.</p>
-&lt;div class="x"&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;/div&gt;
+<pre><code class="language-html">&lt;div class="x"&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;/div&gt;
+</code></pre>
 <p>Inline: &lt;b&gt;bold&lt;/b&gt; tail.</p>
 ```
 

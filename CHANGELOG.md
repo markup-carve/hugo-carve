@@ -15,10 +15,12 @@ so engine pin moves get an entry of their own.
 
 - Require carve-go v0.1.6, which embeds the carve-rs 0.1.9 engine. Tables,
   lists and included content use its current rendering rules (#44).
+- Denied raw HTML blocks render as escaped code blocks under `--safe` and
+  the article and comment profiles, rather than as escaped paragraphs (#44).
 - Include warnings now use `include-id-rename` for a renamed id. Update build
   scripts that match the former `include-heading-id-rename` rule (#44).
-- Quoted include paths decode punctuation escapes. Double a backslash in a
-  path when it must remain literal (#44).
+- Image alt text and quoted include paths decode punctuation escapes. Double
+  a backslash when it must remain literal (#44).
 
 ## v0.1.2 - 2026-10-08
 
