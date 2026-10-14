@@ -247,6 +247,9 @@ func TestConvert_RawHTMLPerProfile(t *testing.T) {
 		if strings.Contains(res.BodyHTML, raw) {
 			t.Errorf("profile %q should not emit a live raw block, got:\n%s", profile, res.BodyHTML)
 		}
+		if profile != "minimal" && !strings.Contains(res.BodyHTML, `<pre><code class="language-html">`) {
+			t.Errorf("profile %q should show denied raw blocks as code, got:\n%s", profile, res.BodyHTML)
+		}
 		if !strings.Contains(res.BodyHTML, "&lt;div") {
 			t.Errorf("profile %q should escape the raw block, got:\n%s", profile, res.BodyHTML)
 		}

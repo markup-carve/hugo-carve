@@ -429,6 +429,9 @@ func TestConvertWithOptions_SafeEscapesRawHTML(t *testing.T) {
 			t.Errorf("Safe must not emit %q, got:\n%s", live, res.BodyHTML)
 		}
 	}
+	if !strings.Contains(res.BodyHTML, `<pre><code class="language-html">&lt;div`) {
+		t.Errorf("Safe should show denied raw blocks as code, got:\n%s", res.BodyHTML)
+	}
 	for _, escaped := range []string{"&lt;script&gt;", "&lt;b&gt;bold&lt;/b&gt;"} {
 		if !strings.Contains(res.BodyHTML, escaped) {
 			t.Errorf("Safe should escape raw HTML into %q, got:\n%s", escaped, res.BodyHTML)
