@@ -156,10 +156,11 @@ Converts *.crv files into Hugo HTML content pages.
 - `--lint` prints each lint finding as `hugo-carve: PATH:LINE:COLUMN: RULE:
   MESSAGE` on stderr and converts the pages as usual. `--lint-strict` also
   exits 1 after the run when there was any finding. The line counts the front
-  matter, so it points at the line in the file. The linter checks the page
-  before includes are expanded, and with `--extensions` or `--static` it runs
-  with the bundled extensions, which changes some findings: the bundle resolves
-  fragment links the core rules report as broken.
+  matter, so it points at the line in the file. With `--extensions` or
+  `--static` the linter runs with the bundled extensions, which changes some
+  findings: the bundle resolves fragment links the core rules report as broken.
+  With `--includes` it also lints every included Carve file; see
+  [Lint across includes](#lint-across-includes).
 
 `hugo-carve` takes flags and nothing else. An operand is refused with a message
 rather than ignored, because Go's flag parsing stops at the first non-flag
@@ -190,6 +191,28 @@ A target that cannot be read leaves the directive as written and prints a line
 naming the page. The message does not say whether the file was missing or
 refused by containment: both report `include-unresolved`, so a page cannot be
 used to probe the filesystem.
+
+A directive can take part of a file. `@region:name` keeps the lines between
+`%% #region name` and `%% #endregion name`, and `@lines:start-end` keeps a line
+range:
+
+```
+{{ snippets/setup.crv @region:install }}
+```
+
+### Lint across includes
+
+With `--includes`, `--lint` follows the includes and lints every included Carve
+file too. A finding there names the page, the included file and the chain of
+include sites:
+
+```
+hugo-carve: content/page.crv: parts/frag.crv:3:1: unattached-block-attribute: ... (included at page.crv:6:1)
+```
+
+Included files are relative to the include root. A site in the page counts its
+front matter, like any other page position. An include that cannot be expanded
+is reported once, by the include warning above, and not again by the linter.
 
 ### Knowing when to run again
 
@@ -274,11 +297,17 @@ what this flag controls:
 | event-handler attribute (`onclick=`) | already dropped | dropped |
 | bidi override characters (Trojan Source) | already removed | removed |
 | a symbol value from `--symbol` / `--symbols` | inserted raw | **inserted raw** |
+| `{{ path }}` include with `--includes` | expanded | **left literal, no file read** |
 
 That last row is the one to read twice. `--safe` is a statement about the
 **document**; a symbol value is **site configuration**, so it is substituted
 unescaped either way. `--safe` is not a license to build a symbol map out of
 page content - see the security note under [Symbols](#symbols).
+
+`--safe` also turns includes off: with both flags, no file is read, every
+directive stays as written, and the run says so once on stderr. Content you do
+not trust should not choose files to pull in from the build host. The linter
+follows the same rule and does not open included files under `--safe`.
 
 Two further limits worth stating plainly. `--safe` is a rendering option, not a
 sandbox: it says nothing about what your Hugo templates, shortcodes or theme

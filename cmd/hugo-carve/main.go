@@ -103,6 +103,10 @@ func run(args []string, stdout, stderr *os.File) error {
 		root = abs
 	}
 
+	if *safe && *includes {
+		fmt.Fprintln(stderr, "hugo-carve: -safe reads no files, so -includes leaves every {{ path }} directive literal")
+	}
+
 	c := &converter{
 		contentDir:  *contentDir,
 		outDir:      *outDir,
@@ -363,17 +367,30 @@ func (c *converter) convertFile(src string) error {
 	return nil
 }
 
-// lintFile prints one line per finding, positioned in the file as written.
-// The linter reads the page before includes are expanded.
+// lintFile prints one line per finding, positioned in the file it arose in.
 func (c *converter) lintFile(src, source string, opts convert.Options) error {
 	findings, err := convert.Lint(source, opts)
 	if err != nil {
 		return fmt.Errorf("lint %q: %w", src, err)
 	}
 	for _, f := range findings {
-		fmt.Fprintf(c.warn, "hugo-carve: %s:%d:%d: %s: %s\n", src, f.Line, f.Column, f.Rule, f.Message)
+		c.findings++
+		// The render reports an include it could not expand; do not print it
+		// twice, but it still counts for -lint-strict.
+		if c.includes && strings.HasPrefix(f.Rule, "include-") {
+			continue
+		}
+		if f.File == "" {
+			fmt.Fprintf(c.warn, "hugo-carve: %s:%d:%d: %s: %s\n", src, f.Line, f.Column, f.Rule, f.Message)
+			continue
+		}
+		sites := make([]string, 0, len(f.IncludedBy))
+		for _, s := range f.IncludedBy {
+			sites = append(sites, fmt.Sprintf("%s:%d:%d", s.File, s.Line, s.Column))
+		}
+		fmt.Fprintf(c.warn, "hugo-carve: %s: %s:%d:%d: %s: %s (included at %s)\n",
+			src, f.File, f.Line, f.Column, f.Rule, f.Message, strings.Join(sites, ", "))
 	}
-	c.findings += len(findings)
 	return nil
 }
 
