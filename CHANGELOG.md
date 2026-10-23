@@ -9,17 +9,19 @@ so engine pin moves get an entry of their own.
 
 ## [Unreleased]
 
+## v0.1.5 - 2026-10-23
+
 ### Changed
 
 - Require carve-go v0.1.8, which embeds carve-rs 0.1.11. `{{ file @region:name }}`
-  includes take one marked region of a file.
+  includes take one marked region of a file (#47).
 - `--safe` now turns includes off: with `--includes` too, every directive stays
-  literal, no file is read, and the run says so once on stderr.
+  literal, no file is read, and the run says so once on stderr (#47).
 
 ### Added
 
 - With `--includes`, `--lint` also lints every included Carve file. A finding
-  there names the page, the included file and the include sites.
+  there names the page, the included file and the include sites (#47).
 
 ## v0.1.4 - 2026-10-23
 
