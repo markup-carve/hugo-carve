@@ -126,3 +126,88 @@ func TestLint_ColumnCountsInlineJSONFrontMatter(t *testing.T) {
 		t.Errorf("expected column 14, got %q", logged)
 	}
 }
+
+func includeLintSite(t *testing.T) string {
+	t.Helper()
+	content := filepath.Join(t.TempDir(), "content")
+	writeFile(t, filepath.Join(content, "parts", "frag.txt"), unattached)
+	writeFile(t, filepath.Join(content, "page.crv"), "+++\ntitle = \"x\"\n+++\nIntro.\n\n{{ parts/frag.txt }}\n\n{{ missing.txt }}\n")
+	return content
+}
+
+// With -includes the pass lints the included file too. The include site is
+// in the page, so it counts the front matter like any page position.
+func TestLint_FollowsIncludes(t *testing.T) {
+	content := includeLintSite(t)
+	logged, err := runCapture(t, "--content", content, "--quiet", "--includes", "--lint-strict")
+	if err == nil {
+		t.Fatal("expected -lint-strict to fail on the included finding")
+	}
+	want := "page.crv: parts/frag.txt:3:1: unattached-block-attribute: "
+	if !strings.Contains(logged, want) || !strings.Contains(logged, "(included at page.crv:6:1)") {
+		t.Errorf("expected %q with its site, got %q", want, logged)
+	}
+	if n := strings.Count(logged, "include-unresolved"); n != 1 {
+		t.Errorf("an unresolved include should be reported once, got %d in %q", n, logged)
+	}
+}
+
+func TestLint_WithoutIncludesIgnoresIncludedFiles(t *testing.T) {
+	content := includeLintSite(t)
+	logged, err := runCapture(t, "--content", content, "--quiet", "--lint-strict")
+	if err != nil {
+		t.Fatalf("run: %v (%q)", err, logged)
+	}
+	if strings.Contains(logged, "frag.txt") {
+		t.Errorf("lint followed an include with -includes off: %q", logged)
+	}
+}
+
+// -safe reads no files: includes stay literal and the lint pass opens none.
+func TestSafe_LeavesIncludesLiteralAndSaysSo(t *testing.T) {
+	content := includeLintSite(t)
+	logged, err := runCapture(t, "--content", content, "--quiet", "--includes", "--safe", "--lint-strict")
+	if err != nil {
+		t.Fatalf("run: %v (%q)", err, logged)
+	}
+	if !strings.Contains(logged, "-safe reads no files") {
+		t.Errorf("expected the -safe note, got %q", logged)
+	}
+	out, readErr := os.ReadFile(filepath.Join(content, "page.html"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(out), "{{ parts/frag.txt }}") {
+		t.Errorf("expected the directive to stay literal under -safe, got %q", out)
+	}
+}
+
+// carve-go v0.1.8 carries carve-rs 0.1.11, which selects `@region:name`.
+func TestIncludes_SelectARegion(t *testing.T) {
+	content := filepath.Join(t.TempDir(), "content")
+	writeFile(t, filepath.Join(content, "snippet.crv"), "Before.\n\n%% #region keep\nKept line.\n%% #endregion keep\n\nAfter.\n")
+	writeFile(t, filepath.Join(content, "page.crv"), "{{ snippet.crv @region:keep }}\n")
+	runCLI(t, "--content", content, "--quiet", "--includes")
+	out, err := os.ReadFile(filepath.Join(content, "page.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(out)
+	if !strings.Contains(html, "Kept line.") || strings.Contains(html, "Before.") || strings.Contains(html, "After.") {
+		t.Errorf("expected only the region, got %q", html)
+	}
+}
+
+// An include the render could not expand is printed once, by the render, and
+// still fails -lint-strict.
+func TestLint_StrictFailsOnAnUnresolvedInclude(t *testing.T) {
+	content := filepath.Join(t.TempDir(), "content")
+	writeFile(t, filepath.Join(content, "page.crv"), "{{ missing.txt }}\n")
+	logged, err := runCapture(t, "--content", content, "--quiet", "--includes", "--lint-strict")
+	if err == nil {
+		t.Fatalf("expected -lint-strict to fail, got %q", logged)
+	}
+	if n := strings.Count(logged, "include-unresolved"); n != 1 {
+		t.Errorf("expected one report, got %d in %q", n, logged)
+	}
+}
