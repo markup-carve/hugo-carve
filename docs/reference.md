@@ -104,6 +104,11 @@ Converts *.crv files into Hugo HTML content pages.
         relative value resolves against the working directory
   -includes
         expand {{ path }} includes from disk, contained to -include-root
+  -lint
+        report the engine's lint findings for every page on stderr, one line
+        each; pages are still converted
+  -lint-strict
+        like -lint, and exit 1 when any page has a finding (implies -lint)
   -out string
         output directory (default: in place, next to the source)
   -profile full|article|comment|minimal
@@ -148,6 +153,13 @@ Converts *.crv files into Hugo HTML content pages.
   be. Off by default. See [Profiles and their input caps](#profiles-and-their-input-caps).
 - `--symbols FILE` and `--symbol NAME=VALUE` supply the symbol map that decides
   what `:name:` renders as. See [Symbols](#symbols).
+- `--lint` prints each lint finding as `hugo-carve: PATH:LINE:COLUMN: RULE:
+  MESSAGE` on stderr and converts the pages as usual. `--lint-strict` also
+  exits 1 after the run when there was any finding. The line counts the front
+  matter, so it points at the line in the file. The linter checks the page
+  before includes are expanded, and with `--extensions` or `--static` it runs
+  with the bundled extensions, which changes some findings: the bundle resolves
+  fragment links the core rules report as broken.
 
 `hugo-carve` takes flags and nothing else. An operand is refused with a message
 rather than ignored, because Go's flag parsing stops at the first non-flag

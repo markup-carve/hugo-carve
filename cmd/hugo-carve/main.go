@@ -59,6 +59,8 @@ func run(args []string, stdout, stderr *os.File) error {
 	includes := fs.Bool("includes", false, "expand `{{ path }}` includes from disk, contained to -include-root")
 	includeRoot := fs.String("include-root", "", "containment root for includes (default: the content `directory`). A relative value resolves against the working directory")
 	depsFile := fs.String("deps", "", "write the include dependencies of every page to this JSON `file`")
+	lint := fs.Bool("lint", false, "report the engine's lint findings for every page on stderr, one line each; pages are still converted")
+	lintStrict := fs.Bool("lint-strict", false, "like -lint, and exit 1 when any page has a finding (implies -lint)")
 	var symbolFiles repeatable
 	fs.Var(&symbolFiles, "symbols", "path to a JSON `file` mapping a symbol name to what :name: renders as (repeatable; merged left to right)")
 	var symbolPairs repeatable
@@ -114,13 +116,20 @@ func run(args []string, stdout, stderr *os.File) error {
 		includes:    *includes,
 		includeRoot: root,
 		depsFile:    *depsFile,
+		lint:        *lint || *lintStrict,
 		log:         stdout,
 		warn:        stderr,
 	}
 	if err := c.walk(); err != nil {
 		return err
 	}
-	return c.writeDeps()
+	if err := c.writeDeps(); err != nil {
+		return err
+	}
+	if *lintStrict && c.findings > 0 {
+		return fmt.Errorf("%d lint finding(s) with -lint-strict", c.findings)
+	}
+	return nil
 }
 
 type converter struct {
@@ -136,6 +145,8 @@ type converter struct {
 	includes    bool
 	includeRoot string
 	depsFile    string
+	lint        bool
+	findings    int
 	log         *os.File
 	warn        *os.File
 	deps        []pageDeps
@@ -326,6 +337,12 @@ func (c *converter) convertFile(src string) error {
 		opts.SourcePath = absolute
 	}
 
+	if c.lint {
+		if err := c.lintFile(src, string(srcBytes), opts); err != nil {
+			return err
+		}
+	}
+
 	res, err := convert.ConvertWithOptions(string(srcBytes), opts)
 	if err != nil {
 		return fmt.Errorf("convert %q: %w", src, err)
@@ -343,6 +360,20 @@ func (c *converter) convertFile(src string) error {
 	if !c.quiet {
 		fmt.Fprintf(c.log, "  - %s -> %s\n", src, out)
 	}
+	return nil
+}
+
+// lintFile prints one line per finding, positioned in the file as written.
+// The linter reads the page before includes are expanded.
+func (c *converter) lintFile(src, source string, opts convert.Options) error {
+	findings, err := convert.Lint(source, opts)
+	if err != nil {
+		return fmt.Errorf("lint %q: %w", src, err)
+	}
+	for _, f := range findings {
+		fmt.Fprintf(c.warn, "hugo-carve: %s:%d:%d: %s: %s\n", src, f.Line, f.Column, f.Rule, f.Message)
+	}
+	c.findings += len(findings)
 	return nil
 }
 

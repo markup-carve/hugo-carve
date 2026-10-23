@@ -9,6 +9,18 @@ so engine pin moves get an entry of their own.
 
 ## [Unreleased]
 
+### Changed
+
+- Require carve-go v0.1.7, which embeds the carve-rs 0.1.10 engine. An empty
+  destination now parses as a link or image: `[x]()` renders `<a href="">`
+  where it used to stay literal text.
+
+### Added
+
+- `--lint` prints the engine's lint findings for every page, one line each,
+  positioned in the file as written. `--lint-strict` also exits 1 when there is
+  any finding.
+
 ## v0.1.3 - 2026-10-14
 
 ### Changed

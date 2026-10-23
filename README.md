@@ -65,6 +65,20 @@ Symbol files and repeated `--symbol NAME=VALUE` flags configure `:name:`
 shortcodes. Symbol values are trusted output and must not come from untrusted
 input.
 
+## Lint
+
+`--lint` prints the engine's lint findings for every page on stderr, one line
+each, and still converts the pages. `--lint-strict` does the same and exits 1
+when any page has a finding, which suits CI:
+
+```bash
+hugo-carve --content content --lint-strict
+```
+
+```
+hugo-carve: content/post.crv:3:1: unattached-block-attribute: This block attribute reaches no block: ...
+```
+
 ## Hugo configuration
 
 Hugo must pass generated HTML through unchanged:
