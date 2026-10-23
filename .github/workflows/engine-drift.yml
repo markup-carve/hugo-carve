@@ -67,10 +67,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check out carve-go
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: markup-carve/carve-go
           path: carve-go
@@ -79,7 +79,7 @@ jobs:
           fetch-tags: true
 
       - name: Check out carve-rs
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: markup-carve/carve-rs
           path: carve-rs
@@ -159,14 +159,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: 'stable'
 
       - name: Check out the corpus from carve main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: markup-carve/carve
           path: carve-main
