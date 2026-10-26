@@ -1,117 +1,27 @@
 # hugo-carve
 
-A preprocessor for authoring [Hugo](https://gohugo.io) pages in the
-[Carve](https://github.com/markup-carve) markup language.
-
-## Why it is a preprocessor
-
-Hugo has no public API for registering a third-party markup language. Its
-content renderers and external helpers are fixed, so a module cannot add
-`.crv` as a native page type.
-
-`hugo-carve` runs before Hugo. It converts each Carve page to an HTML content
-page, preserves TOML, YAML, or JSON frontmatter, and leaves unrelated HTML
-files alone:
-
-```text
-foo.crv -> hugo-carve -> foo.html -> hugo -> public/foo/index.html
-```
-
-The [design reference](docs/reference.md#honest-limitation-this-is-a-preprocessor-not-a-hugo-plugin)
-compares this approach with render hooks, external helpers, modules, and
-content adapters.
+Hugo preprocessor for Carve pages, using carve-go v0.1.8. It converts `.crv` content before Hugo builds the site. Read the [Carve documentation](https://markup-carve.github.io/carve/) for the language syntax.
 
 ## Install
 
-```bash
+```sh
 go install github.com/markup-carve/hugo-carve/cmd/hugo-carve@latest
 ```
 
-`hugo-carve` is installed under `$(go env GOPATH)/bin`. Hugo itself is also
-required.
+## Usage
 
-## Build a site
-
-```bash
+```sh
 hugo-carve --content content
 hugo
 ```
 
-Use `--out` to keep generated HTML outside the authored content tree. Other
-content and page resources must then be copied or mounted into that tree.
-`--clean` removes generated pages. For local preview, rerun the converter when
-a Carve source or include changes.
+## Documentation
 
-## Includes and rendering policy
+- [Carve documentation](https://markup-carve.github.io/carve/)
+- [Documentation index](docs/README.md)
+- [Reference](docs/reference.md)
+- [Development](docs/development.md)
 
-Includes are off unless `--includes` is set. Paths are confined to the content
-directory by default; `--include-root` selects a different containment root.
-`{{ file.crv @region:name }}` takes one marked region of a file. `--safe` turns
-includes off, so no file is read for untrusted content.
-`--deps` writes the dependency graph for watch tooling.
+## License
 
-Use `--safe` for content that the site does not control. It escapes raw HTML.
-Profiles add construct and size limits:
-
-```bash
-hugo-carve --content content --profile article
-```
-
-An over-limit page stops the build and produces no output file.
-
-`--extensions` enables the bundled extension set. `--static` also enables the
-set, then flattens interactive constructs and degrades diagrams and math to
-source so the generated HTML has no runtime dependency.
-
-Symbol files and repeated `--symbol NAME=VALUE` flags configure `:name:`
-shortcodes. Symbol values are trusted output and must not come from untrusted
-input.
-
-## Lint
-
-`--lint` prints the engine's lint findings for every page on stderr, one line
-each, and still converts the pages. `--lint-strict` does the same and exits 1
-when any page has a finding, which suits CI:
-
-```bash
-hugo-carve --content content --lint-strict
-```
-
-```
-hugo-carve: content/post.crv:3:1: unattached-block-attribute: This block attribute reaches no block: ...
-```
-
-With `--includes`, the linter also checks every included Carve file and names
-the include site of each finding there.
-
-Aligned table formatting is not exposed. hugo-carve renders HTML and does not
-format Carve, and the engine's aligned-table support for this path waits on
-markup-carve/carve-rs#3110.
-
-## Hugo configuration
-
-Hugo must pass generated HTML through unchanged:
-
-```toml
-[security]
-allowContent = ['^text/html$']
-
-ignoreFiles = ['\.crv$']
-```
-
-The first setting permits generated HTML content pages. The second keeps raw
-Carve sources out of `public/`. Use `hugo-carve --safe` to control raw HTML
-authored in Carve.
-
-Load Carve's stylesheet and wrap content with `.carve-content` when using
-styled extensions. See [Styling](docs/reference.md#styling).
-
-## Reference
-
-The [complete reference](docs/reference.md) documents every CLI flag, includes,
-profiles, size caps, symbols, required Hugo settings, and the example site.
-
-## Development
-
-Contributor setup, tests, and maintenance commands are in the
-[development guide](docs/development.md).
+[MIT](LICENSE)
