@@ -30,10 +30,6 @@ required.
 
 ## Build a site
 
-```bash
-hugo-carve --content content
-hugo
-```
 
 Use `--out` to keep generated HTML outside the authored content tree. Other
 content and page resources must then be copied or mounted into that tree.
