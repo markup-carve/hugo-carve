@@ -51,7 +51,7 @@ func Lint(source string, opts Options) ([]Finding, error) {
 		return line + offset, column
 	}
 
-	lintOpts := carve.LintOptions{Bundle: opts.Extensions || opts.Static}
+	lintOpts := carve.LintOptions{Bundle: opts.Extensions || opts.Static, CaptionHints: opts.CaptionHints}
 	page := ""
 	if opts.Includes && !opts.Safe {
 		lintOpts.Include = &carve.Include{Root: opts.IncludeRoot, SourcePath: opts.SourcePath}

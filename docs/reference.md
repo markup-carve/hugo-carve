@@ -90,6 +90,9 @@ Usage: hugo-carve [flags]
 
 Converts *.crv files into Hugo HTML content pages.
 
+  -caption-hints
+        also report a caption-looking paragraph next to a table or image
+        (implies -lint)
   -clean
         remove generated .html outputs instead of building them
   -content string
@@ -161,6 +164,13 @@ Converts *.crv files into Hugo HTML content pages.
   findings: the bundle resolves fragment links the core rules report as broken.
   With `--includes` it also lints every included Carve file; see
   [Lint across includes](#lint-across-includes).
+  The engine's default rules include hints for spellings that render fine but
+  are not canonical, such as a `---` thematic break (`thematic-break-spelling`)
+  or the deprecated `|=>` cell alignment (`deprecated-cell-alignment`). The
+  findings carry no severity, so `--lint-strict` fails on these hints too.
+- `--caption-hints` adds the engine's opt-in `caption-looking-paragraph` rule:
+  a paragraph such as `Table 1: Results` directly before or after a table or
+  image, which was probably meant as its caption. Implies `--lint`.
 
 `hugo-carve` takes flags and nothing else. An operand is refused with a message
 rather than ignored, because Go's flag parsing stops at the first non-flag
@@ -199,6 +209,18 @@ range:
 ```
 {{ snippets/setup.crv @region:install }}
 ```
+
+A CSV or TSV file included as a table can be cut down too. `@rows:start-end`
+keeps those data records (the header row still comes from the top of the file),
+and `@cols` keeps the named columns in the order given:
+
+```
+{table}
+{{ data/plans.csv @code:csv @rows:2-3 @cols:"Seats,Plan" }}
+```
+
+With `header-rows=0` on the `{table}` line, `@cols:1-3` selects columns by
+number instead.
 
 ### Lint across includes
 
