@@ -61,6 +61,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	depsFile := fs.String("deps", "", "write the include dependencies of every page to this JSON `file`")
 	lint := fs.Bool("lint", false, "report the engine's lint findings for every page on stderr, one line each; pages are still converted")
 	lintStrict := fs.Bool("lint-strict", false, "like -lint, and exit 1 when any page has a finding (implies -lint)")
+	captionHints := fs.Bool("caption-hints", false, "also report a caption-looking paragraph next to a table or image (implies -lint)")
 	var symbolFiles repeatable
 	fs.Var(&symbolFiles, "symbols", "path to a JSON `file` mapping a symbol name to what :name: renders as (repeatable; merged left to right)")
 	var symbolPairs repeatable
@@ -108,21 +109,22 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 
 	c := &converter{
-		contentDir:  *contentDir,
-		outDir:      *outDir,
-		clean:       *clean,
-		quiet:       *quiet,
-		extensions:  *extensions,
-		static:      *static,
-		safe:        *safe,
-		profile:     *profile,
-		symbols:     symbols,
-		includes:    *includes,
-		includeRoot: root,
-		depsFile:    *depsFile,
-		lint:        *lint || *lintStrict,
-		log:         stdout,
-		warn:        stderr,
+		contentDir:   *contentDir,
+		outDir:       *outDir,
+		clean:        *clean,
+		quiet:        *quiet,
+		extensions:   *extensions,
+		static:       *static,
+		safe:         *safe,
+		profile:      *profile,
+		symbols:      symbols,
+		includes:     *includes,
+		includeRoot:  root,
+		depsFile:     *depsFile,
+		lint:         *lint || *lintStrict || *captionHints,
+		captionHints: *captionHints,
+		log:          stdout,
+		warn:         stderr,
 	}
 	if err := c.walk(); err != nil {
 		return err
@@ -137,23 +139,24 @@ func run(args []string, stdout, stderr *os.File) error {
 }
 
 type converter struct {
-	contentDir  string
-	outDir      string
-	clean       bool
-	quiet       bool
-	extensions  bool
-	static      bool
-	safe        bool
-	profile     string
-	symbols     map[string]string
-	includes    bool
-	includeRoot string
-	depsFile    string
-	lint        bool
-	findings    int
-	log         *os.File
-	warn        *os.File
-	deps        []pageDeps
+	contentDir   string
+	outDir       string
+	clean        bool
+	quiet        bool
+	extensions   bool
+	static       bool
+	safe         bool
+	profile      string
+	symbols      map[string]string
+	includes     bool
+	includeRoot  string
+	depsFile     string
+	lint         bool
+	captionHints bool
+	findings     int
+	log          *os.File
+	warn         *os.File
+	deps         []pageDeps
 }
 
 // pageDeps is one page's entry in the -deps manifest.
@@ -325,12 +328,13 @@ func (c *converter) convertFile(src string) error {
 	}
 
 	opts := convert.Options{
-		Extensions: c.extensions,
-		Static:     c.static,
-		Safe:       c.safe,
-		Profile:    c.profile,
-		Symbols:    c.symbols,
-		Includes:   c.includes,
+		Extensions:   c.extensions,
+		Static:       c.static,
+		Safe:         c.safe,
+		Profile:      c.profile,
+		Symbols:      c.symbols,
+		Includes:     c.includes,
+		CaptionHints: c.captionHints,
 	}
 	if c.includes {
 		absolute, err := filepath.Abs(src)

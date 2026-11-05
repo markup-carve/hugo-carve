@@ -118,6 +118,11 @@ type Options struct {
 	// rather than waiting for the engine to.
 	Profile string
 
+	// CaptionHints makes Lint also report a caption-looking paragraph next to
+	// a table or image (the engine's opt-in caption-looking-paragraph rule).
+	// Rendering ignores it.
+	CaptionHints bool
+
 	// Symbols maps a shortcode name to the text `:NAME:` renders as. Carve
 	// parses `:name:` in its core - no extension needed - but what a name
 	// renders as is a render option, so with no map a shortcode renders as
