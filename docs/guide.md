@@ -78,9 +78,8 @@ hugo-carve: content/post.crv:3:1: unattached-block-attribute: This block attribu
 With `--includes`, the linter also checks every included Carve file and names
 the include site of each finding there.
 
-Aligned table formatting is not exposed. hugo-carve renders HTML and does not
-format Carve, and the engine's aligned-table support for this path waits on
-markup-carve/carve-rs#3110.
+Aligned table formatting is not exposed: hugo-carve renders HTML and does not
+format Carve.
 
 ## Hugo configuration
 

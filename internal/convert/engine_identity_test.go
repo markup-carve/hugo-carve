@@ -59,7 +59,7 @@ func TestConvertAddsNothingToTheEngine(t *testing.T) {
 	// expectation is computed from the split itself, so they are checked rather
 	// than excused.
 	paired := 0
-	var lost, rendered, reassembled []string
+	var lost, rendered, reassembled, engineFailed []string
 
 	for _, e := range entries {
 		name := e.Name()
@@ -91,6 +91,12 @@ func TestConvertAddsNothingToTheEngine(t *testing.T) {
 
 		got, err := Convert(source)
 		if err != nil {
+			// The linked engine failing on the same body is engine behavior
+			// (TestSpecCorpus counts it), not something this package added.
+			if _, engineErr := carve.ToHTMLOptions(body, carve.Options{}); engineErr != nil {
+				engineFailed = append(engineFailed, base)
+				continue
+			}
 			rendered = append(rendered, base+": convert error: "+err.Error())
 			continue
 		}
@@ -128,6 +134,11 @@ func TestConvertAddsNothingToTheEngine(t *testing.T) {
 	sort.Strings(reassembled)
 
 	t.Logf("identity-checked=%d", paired)
+	if len(engineFailed) > 0 {
+		sort.Strings(engineFailed)
+		t.Logf("%d documents fail in the linked engine itself, with or without Convert: %s",
+			len(engineFailed), strings.Join(engineFailed, ", "))
+	}
 
 	if len(lost) > 0 {
 		t.Errorf("%d of %d documents do not survive the front matter split byte for byte "+
