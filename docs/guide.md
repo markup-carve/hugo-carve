@@ -40,7 +40,8 @@ a Carve source or include changes.
 
 Includes are off unless `--includes` is set. Paths are confined to the content
 directory by default; `--include-root` selects a different containment root.
-`{{ file.crv @region:name }}` takes one marked region of a file. `--safe` turns
+`{{ file.crv @region:name }}` takes one marked region of a file, and
+`@rows` and `@cols` take records and columns of a CSV or TSV table include. `--safe` turns
 includes off, so no file is read for untrusted content.
 `--deps` writes the dependency graph for watch tooling.
 
@@ -77,6 +78,11 @@ hugo-carve: content/post.crv:3:1: unattached-block-attribute: This block attribu
 
 With `--includes`, the linter also checks every included Carve file and names
 the include site of each finding there.
+
+The engine's default rules include hints for non-canonical spellings, such as
+a `---` thematic break where Carve writes `***`. Findings carry no severity, so
+`--lint-strict` fails on these hints as well. `--caption-hints` adds the opt-in
+check for a caption-looking paragraph next to a table or image.
 
 Aligned table formatting is not exposed: hugo-carve renders HTML and does not
 format Carve.

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -91,7 +92,8 @@ var compareMarkerRun = regexp.MustCompile(`^:{3,}`)
 func declaredCorpusSize(t *testing.T, corpusDir string) int {
 	t.Helper()
 	examplesDir := filepath.Join(corpusDir, "..", "..", "resources", "examples")
-	declared := 0
+	// The generator writes one fixture per distinct input (markup-carve/carve#5244).
+	inputs := map[string]bool{}
 	for _, path := range specExamplePaths(t, examplesDir) {
 		blob, err := os.ReadFile(path)
 		if err != nil {
@@ -102,8 +104,11 @@ func declaredCorpusSize(t *testing.T, corpusDir string) int {
 			t.Fatalf("no corpus source page at %s: %v. tests/corpus is generated from these pages; "+
 				"if the spec moved them, this helper has to move with them", path, err)
 		}
-		declared += countDeclaredPairs(strings.Split(string(blob), "\n"))
+		for _, input := range declaredInputs(strings.Split(string(blob), "\n")) {
+			inputs[input] = true
+		}
 	}
+	declared := len(inputs)
 	if declared == 0 {
 		t.Fatalf("the corpus source pages under %s declare no ::: compare blocks at all; "+
 			"this is a wiring problem, not a corpus of size zero", examplesDir)
@@ -115,12 +120,25 @@ func declaredCorpusSize(t *testing.T, corpusDir string) int {
 // Nothing inside an open fence is markup, so a ```` example holding a
 // ``` carve line declares no pair of its own.
 func countDeclaredPairs(lines []string) int {
-	pairs := 0
+	return len(declaredInputs(lines))
+}
+
+// declaredInputs returns the fixture each declared pair writes, after the
+// generator's applyModifiers.
+func declaredInputs(lines []string) []string {
+	var inputs, body, modifiers []string
+	inCarve := false
 	marker, fence := "", ""
 	for _, line := range lines {
 		if fence != "" {
 			if strings.HasPrefix(line, fence) && strings.TrimSpace(line[len(fence):]) == "" {
 				fence = ""
+				if inCarve {
+					inputs = append(inputs, fixtureInput(strings.Join(body, "\n"), modifiers))
+					inCarve = false
+				}
+			} else if inCarve {
+				body = append(body, line)
 			}
 			continue
 		}
@@ -128,7 +146,7 @@ func countDeclaredPairs(lines []string) int {
 		if ticks >= 3 {
 			fence = line[:ticks]
 			if marker != "" && strings.TrimSpace(line[ticks:]) == "carve" {
-				pairs++
+				inCarve, body = true, nil
 			}
 			continue
 		}
@@ -136,12 +154,33 @@ func countDeclaredPairs(lines []string) int {
 		if marker == "" {
 			if compareOpenLine.MatchString(trimmed) {
 				marker = compareMarkerRun.FindString(trimmed)
+				modifiers = strings.Fields(trimmed)[2:]
 			}
 		} else if trimmed == marker {
 			marker = ""
 		}
 	}
-	return pairs
+	return inputs
+}
+
+func fixtureInput(carve string, modifiers []string) string {
+	out := carve + "\n"
+	if slices.Contains(modifiers, "no-final-newline") {
+		out = strings.TrimSuffix(out, "\n")
+	}
+	if slices.Contains(modifiers, "crlf") {
+		out = strings.ReplaceAll(out, "\n", "\r\n")
+	}
+	if slices.Contains(modifiers, "cr") {
+		out = strings.ReplaceAll(out, "\n", "\r")
+	}
+	if slices.Contains(modifiers, "bom") {
+		out = "\ufeff" + out
+	}
+	if slices.Contains(modifiers, "nul") {
+		out = strings.ReplaceAll(out, "\u2400", "\x00")
+	}
+	return out
 }
 
 // requireWholeCorpus is the only place this package decides whether a corpus
