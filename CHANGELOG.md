@@ -9,13 +9,14 @@ so engine pin moves get an entry of their own.
 
 ## [Unreleased]
 
-## v0.1.6 - 2026-11-11
+## v0.1.6 - 2026-11-12
 
 ### Changed
 
 - Require carve-go v0.1.11, which embeds carve-rs 0.1.14 (#53). Braced cell
   alignment (`|={>}`) renders aligned cells, `{table}` CSV/TSV includes take
   `@rows` and `@cols`, and an input that panicked the 0.1.13 engine renders.
+  This also covers the interim carve-go v0.1.10 pin (#51).
 - With `--lint-strict`, the new default findings fail the build: a `---` break
   reports `thematic-break-spelling` (write `***`) and a glued `|=>` reports
   `deprecated-cell-alignment` (write `|={>}`) (#53).
