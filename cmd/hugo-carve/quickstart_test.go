@@ -11,7 +11,8 @@ import (
 
 // TestReadmeQuickStartBuildsASite follows the README as a new user would:
 // scaffold a site with `hugo new site`, add the README's Hugo config, convert
-// a page, run `hugo` (hugo-carve#56). It needs a hugo binary; CI sets HUGO_CARVE_E2E so a
+// a page that opens the way `carve fmt` writes it, run `hugo`
+// (hugo-carve#55, #56). It needs a hugo binary; CI sets HUGO_CARVE_E2E so a
 // missing one fails there instead of skipping.
 func TestReadmeQuickStartBuildsASite(t *testing.T) {
 	hugo, err := exec.LookPath("hugo")
@@ -42,7 +43,7 @@ func TestReadmeQuickStartBuildsASite(t *testing.T) {
 	writeFile(t, filepath.Join(site, "layouts", "single.html"),
 		"<!doctype html><title>{{ .Title }}</title>{{ .Content }}\n")
 	writeFile(t, filepath.Join(site, "content", "demo.crv"),
-		"---\ntitle: Carve Feature Demo\ndate: 2026-06-02\n---\n\n# Carve Feature Demo\n\nSome *bold* text.\n")
+		"---yaml\ntitle: Carve Feature Demo\ndate: 2026-06-02\n---\n\n# Carve Feature Demo\n\nSome *bold* text.\n")
 
 	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
