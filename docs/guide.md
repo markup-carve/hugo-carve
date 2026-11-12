@@ -92,15 +92,16 @@ format Carve.
 Hugo must pass generated HTML through unchanged:
 
 ```toml
+ignoreFiles = ['\.crv$']
+
 [security]
 allowContent = ['^text/html$']
-
-ignoreFiles = ['\.crv$']
 ```
 
-The first setting permits generated HTML content pages. The second keeps raw
-Carve sources out of `public/`. Use `hugo-carve --safe` to control raw HTML
-authored in Carve.
+`ignoreFiles` keeps raw Carve sources out of `public/`, and `allowContent`
+permits generated HTML content pages. Keep `ignoreFiles` above `[security]`:
+below it, TOML reads it as `security.ignoreFiles` and Hugo ignores it. Use
+`hugo-carve --safe` to control raw HTML authored in Carve.
 
 Load Carve's stylesheet and wrap content with `.carve-content` when using
 styled extensions. See [Styling](reference.md#styling).
