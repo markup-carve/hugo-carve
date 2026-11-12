@@ -10,6 +10,17 @@ go install github.com/markup-carve/hugo-carve/cmd/hugo-carve@latest
 
 ## Usage
 
+Add this to your site's `hugo.toml`, above any `[table]`. Hugo refuses HTML content pages without it, and `ignoreFiles` keeps the raw `.crv` sources out of `public/`:
+
+```toml
+ignoreFiles = ['\.crv$']
+
+[security]
+allowContent = ['^text/html$']
+```
+
+Then convert and build:
+
 ```sh
 hugo-carve --content content
 hugo
