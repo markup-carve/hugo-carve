@@ -9,6 +9,17 @@ so engine pin moves get an entry of their own.
 
 ## [Unreleased]
 
+## v0.1.7 - 2026-11-12
+
+### Fixed
+
+- A typed frontmatter opener (`---yaml`, the form `carve fmt` writes, and
+  `---toml`, `---json`) reaches Hugo instead of being dropped, so the page keeps
+  its title and params. A format Hugo cannot read is now an error (#55).
+- The README quick start lists the Hugo config it needs. The guide had
+  `ignoreFiles` below `[security]`, where Hugo never reads it and `.crv`
+  sources get published; move it above in a copied config (#58).
+
 ## v0.1.6 - 2026-11-12
 
 ### Changed

@@ -1,6 +1,6 @@
 // Package convert splits a Carve source file into its front matter and body,
 // renders the Carve body to HTML via carve-go, and reassembles a Hugo-readable
-// HTML content page (front matter preserved verbatim, body replaced with HTML).
+// HTML content page (front matter kept, body replaced with HTML).
 //
 // Hugo has no public API to register a new markup language for a custom file
 // extension, so hugo-carve is a preprocessor: it produces `.html` content
@@ -16,18 +16,11 @@ import (
 	carve "github.com/markup-carve/carve-go"
 )
 
-// fmDelims maps a front matter opening delimiter to its closing delimiter.
-// TOML and YAML use a fenced form; JSON front matter is a brace-delimited
-// object that Hugo also accepts.
-type fmFormat struct {
-	open  string
-	close string
-}
-
 // Result is the outcome of converting one Carve document.
 type Result struct {
-	// FrontMatter is the raw front matter block (including its delimiters),
-	// or the empty string when the source had none.
+	// FrontMatter is the front matter block (including its delimiters) in the
+	// form Hugo reads, or the empty string when the source had none. A typed
+	// Carve opener is rewritten to that form; every other block is verbatim.
 	FrontMatter string
 	// BodyHTML is the rendered HTML of the Carve body.
 	BodyHTML string
@@ -48,8 +41,8 @@ type Result struct {
 
 // Convert renders a Carve source document to a Hugo HTML content page.
 //
-// It detects and preserves a leading TOML (+++), YAML (---), or JSON front
-// matter block, renders only the body through carve-go, and returns the
+// It detects and preserves a leading TOML (+++), Carve (---, ---yaml, ---toml,
+// ---json), or JSON front matter block, renders only the body through carve-go, and returns the
 // reassembled output. It is pure: feeding the produced HTML body back in is a
 // no-op for the front matter and never re-renders HTML as Carve, which keeps
 // the CLI idempotent when run against already-converted trees.
@@ -179,6 +172,10 @@ type Options struct {
 // ConvertWithOptions is Convert with explicit engine options.
 func ConvertWithOptions(source string, opts Options) (Result, error) {
 	fm, body := splitFrontMatter(source)
+	fm, err := hugoFrontMatter(fm)
+	if err != nil {
+		return Result{}, err
+	}
 
 	carveOpts := carve.Options{Static: opts.Static, Safe: opts.Safe, Profile: opts.Profile, Symbols: opts.Symbols}
 	if opts.Extensions {
@@ -190,7 +187,6 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 
 	var (
 		html     string
-		err      error
 		included carve.IncludeResult
 	)
 	if opts.Includes {
@@ -307,11 +303,12 @@ func splitFrontMatter(source string) (frontMatter, body string) {
 	lead := len(source) - len(trimmed)
 	prefix := source[:lead]
 
-	// Fenced front matter: TOML (+++) or YAML (---).
-	for _, f := range []fmFormat{{"+++", "+++"}, {"---", "---"}} {
-		if block, rest, ok := splitFenced(trimmed, f); ok {
-			return prefix + block, rest
-		}
+	// Fenced front matter: Hugo's TOML (+++) or Carve's (---, optionally typed).
+	if block, rest, ok := splitFenced(trimmed, isHugoTOMLDelim, isHugoTOMLDelim); ok {
+		return prefix + block, rest
+	}
+	if block, rest, ok := splitFenced(trimmed, isCarveOpener, isCarveCloser); ok {
+		return prefix + block, rest
 	}
 
 	// JSON front matter: a leading brace-balanced object.
@@ -322,25 +319,106 @@ func splitFrontMatter(source string) (frontMatter, body string) {
 	return "", source
 }
 
-// splitFenced handles +++ / --- delimited front matter. The opening delimiter
-// must be the very first line. Everything up to and including the closing
-// delimiter line is the front matter block.
-func splitFenced(s string, f fmFormat) (block, rest string, ok bool) {
+// splitFenced handles delimited front matter. The opening delimiter must be
+// the very first line. Everything up to and including the closing delimiter
+// line is the front matter block.
+func splitFenced(s string, isOpen, isClose func(string) bool) (block, rest string, ok bool) {
 	lines := strings.SplitAfter(s, "\n")
-	if len(lines) == 0 {
-		return "", "", false
-	}
-	if strings.TrimRight(lines[0], "\r\n") != f.open {
+	if !isOpen(lines[0]) {
 		return "", "", false
 	}
 	for i := 1; i < len(lines); i++ {
-		if strings.TrimRight(lines[i], "\r\n") == f.close {
+		if isClose(lines[i]) {
 			block = strings.Join(lines[:i+1], "")
 			rest = strings.Join(lines[i+1:], "")
 			return block, rest, true
 		}
 	}
 	return "", "", false
+}
+
+func isHugoTOMLDelim(line string) bool {
+	return strings.TrimRight(line, "\r\n") == "+++"
+}
+
+func isCarveOpener(line string) bool {
+	_, ok := carveOpenerFormat(line)
+	return ok
+}
+
+// isCarveCloser accepts trailing spaces and tabs, which Carve drops (PART 2).
+func isCarveCloser(line string) bool {
+	return strings.TrimRight(line, " \t\r\n") == "---"
+}
+
+// carveOpenerFormat reads Carve's frontmatter_open: `---`, at most one space,
+// an optional letters-and-digits format token. A bare opener is yaml. Trailing
+// spaces and tabs are dropped first, so `---<TAB>yaml` and `---  yaml` stay
+// non-openers, as the grammar says.
+func carveOpenerFormat(line string) (format string, ok bool) {
+	rest, found := strings.CutPrefix(strings.TrimRight(line, " \t\r\n"), "---")
+	if !found {
+		return "", false
+	}
+	rest = strings.TrimPrefix(rest, " ")
+	if rest == "" {
+		return "yaml", true
+	}
+	for _, c := range rest {
+		if !('a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9') {
+			return "", false
+		}
+	}
+	return strings.ToLower(rest), true
+}
+
+// hugoFrontMatter rewrites a Carve frontmatter block into the delimiters Hugo
+// reads for its format. Hugo only knows a bare `---` opener, so a typed one
+// left as is would reach the page as text.
+func hugoFrontMatter(block string) (string, error) {
+	const bom = "\uFEFF"
+	body := strings.TrimPrefix(block, bom)
+	prefix := block[:len(block)-len(body)]
+	lines := strings.SplitAfter(body, "\n")
+	format, ok := carveOpenerFormat(lines[0])
+	// Hugo reads a bare opener itself, trailing whitespace included.
+	if !ok || strings.TrimRight(lines[0], " \t\r\n") == "---" {
+		return block, nil
+	}
+	closer := len(lines) - 1
+	for lines[closer] == "" {
+		closer--
+	}
+	content := strings.Join(lines[1:closer], "")
+	eol := lineEnding(lines[0])
+
+	switch format {
+	case "yaml":
+		return prefix + "---" + eol + content + "---" + lineEnding(lines[closer]), nil
+	case "toml":
+		return prefix + "+++" + eol + content + "+++" + lineEnding(lines[closer]), nil
+	case "json":
+		object := strings.TrimSpace(content)
+		var probe map[string]json.RawMessage
+		if json.Unmarshal([]byte(object), &probe) != nil {
+			return "", fmt.Errorf("---json front matter is not a JSON object, which is the only JSON front matter Hugo reads")
+		}
+
+		return prefix + object, nil
+	}
+
+	return "", fmt.Errorf("front matter format %q has no Hugo equivalent: use yaml, toml or json", format)
+}
+
+func lineEnding(line string) string {
+	switch {
+	case strings.HasSuffix(line, "\r\n"):
+		return "\r\n"
+	case strings.HasSuffix(line, "\n"):
+		return "\n"
+	}
+
+	return ""
 }
 
 // splitJSON handles brace-delimited JSON front matter at the start of the

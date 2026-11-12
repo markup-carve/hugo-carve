@@ -89,8 +89,16 @@ func TestConvertAddsNothingToTheEngine(t *testing.T) {
 			continue
 		}
 
+		// Hugo reads only a bare `---` opener, so a typed Carve opener is
+		// rewritten into Hugo's delimiters (#55); the expected block is the
+		// verbatim split passed through that rewrite.
+		wantFM, fmErr := hugoFrontMatter(fm)
+
 		got, err := Convert(source)
 		if err != nil {
+			if fmErr != nil {
+				continue
+			}
 			// The linked engine failing on the same body is engine behavior
 			// (TestSpecCorpus counts it), not something this package added.
 			if _, engineErr := carve.ToHTMLOptions(body, carve.Options{}); engineErr != nil {
@@ -112,15 +120,19 @@ func TestConvertAddsNothingToTheEngine(t *testing.T) {
 			rendered = append(rendered, base)
 			continue
 		}
-		if got.FrontMatter != fm {
-			reassembled = append(reassembled, base+": front matter not preserved verbatim")
+		if fmErr != nil {
+			reassembled = append(reassembled, base+": front matter Hugo cannot read was accepted: "+fmErr.Error())
+			continue
+		}
+		if got.FrontMatter != wantFM {
+			reassembled = append(reassembled, base+": front matter not preserved (verbatim, or rewritten to Hugo's delimiters)")
 			continue
 		}
 		// The assembled file still ends in the body that was just verified, and
 		// still opens with the front matter. Checked as prefix and suffix rather
 		// than by rebuilding the expected string, which would only restate
 		// ConvertWithOptions and agree with it by construction.
-		if !strings.HasPrefix(got.Output, fm) || !strings.HasSuffix(got.Output, got.BodyHTML+"\n") {
+		if !strings.HasPrefix(got.Output, wantFM) || !strings.HasSuffix(got.Output, got.BodyHTML+"\n") {
 			reassembled = append(reassembled, base+": output does not open with the front matter and end with the body")
 		}
 	}
