@@ -14,7 +14,7 @@ func TestConvert_TypedFrontMatterOpenerReachesHugo(t *testing.T) {
 		{"yaml", "---yaml\ntitle: T\ndate: 2026-06-02\n---\n\n# T\n", "---\ntitle: T\ndate: 2026-06-02\n---\n"},
 		{"yaml with one space", "--- yaml\ntitle: T\n---\n\n# T\n", "---\ntitle: T\n---\n"},
 		{"bare", "---\ntitle: T\n---\n\n# T\n", "---\ntitle: T\n---\n"},
-		{"bare with trailing tab", "---\t\ntitle: T\n---  \n\n# T\n", "---\ntitle: T\n---\n"},
+		{"bare with trailing tab", "---\t\ntitle: T\n---  \n\n# T\n", "---\t\ntitle: T\n---  \n"},
 		{"uppercase token", "---YAML\ntitle: T\n---\n\n# T\n", "---\ntitle: T\n---\n"},
 		{"toml", "---toml\ntitle = \"T\"\n---\n\n# T\n", "+++\ntitle = \"T\"\n+++\n"},
 		{"json", "---json\n{\"title\": \"T\"}\n---\n\n# T\n", "{\"title\": \"T\"}"},

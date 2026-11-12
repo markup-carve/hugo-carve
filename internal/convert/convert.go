@@ -381,7 +381,8 @@ func hugoFrontMatter(block string) (string, error) {
 	prefix := block[:len(block)-len(body)]
 	lines := strings.SplitAfter(body, "\n")
 	format, ok := carveOpenerFormat(lines[0])
-	if !ok {
+	// Hugo reads a bare opener itself, trailing whitespace included.
+	if !ok || strings.TrimRight(lines[0], " \t\r\n") == "---" {
 		return block, nil
 	}
 	closer := len(lines) - 1
@@ -410,11 +411,14 @@ func hugoFrontMatter(block string) (string, error) {
 }
 
 func lineEnding(line string) string {
-	if strings.HasSuffix(line, "\r\n") {
+	switch {
+	case strings.HasSuffix(line, "\r\n"):
 		return "\r\n"
+	case strings.HasSuffix(line, "\n"):
+		return "\n"
 	}
 
-	return "\n"
+	return ""
 }
 
 // splitJSON handles brace-delimited JSON front matter at the start of the
