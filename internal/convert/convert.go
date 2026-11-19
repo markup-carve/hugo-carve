@@ -10,10 +10,11 @@ package convert
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
-	carve "github.com/markup-carve/carve-go"
+	carve "github.com/markup-carve/carve-go/v2"
 )
 
 // Result is the outcome of converting one Carve document.
@@ -53,39 +54,26 @@ func Convert(source string) (Result, error) {
 // Options configures a conversion. The zero value renders core Carve (no
 // bundled extensions), matching Convert.
 type Options struct {
-	// Extensions enables the engine's bundled extensions - the diagram presets
-	// (mermaid, plantuml, d2, graphviz, wavedrom, abc, vega-lite, chart) plus
-	// details, spoiler, code-callouts, color and math. Diagram fences then
-	// render as hydration elements (`<pre class="plantuml">`, ...) for a
-	// client-side or build-step renderer; core Carve leaves them plain code.
+	// Extensions enables the engine's bundled extensions (diagram presets,
+	// details, spoiler, code callouts, math and the rest). The Carve 0.2
+	// engine reached through carve-go cannot register them yet, so a
+	// conversion with Extensions set fails with ErrExtensionsUnavailable
+	// instead of silently rendering core Carve.
 	Extensions bool
 
-	// Static produces self-contained HTML: interactive constructs are
-	// flattened and diagrams/math degrade to their source. It implies
-	// Extensions (that is what produces the constructs to flatten).
+	// Static renders in the 0.2 "static" mode: self-contained HTML with
+	// interactive constructs flattened. Unlike 0.1 it does not imply
+	// Extensions, because static output is a core render mode in 0.2.
 	Static bool
 
-	// Safe escapes raw HTML instead of emitting it: a `=html` fenced block
-	// and a `{=html}` inline span both render as visible, escaped text. It is
-	// off by default, which is the behavior this package has always had.
-	//
-	// It covers raw passthrough and nothing else, because nothing else needs
-	// covering: Carve's normative hardening is always on, so a dangerous URL
-	// scheme is blanked, an event-handler attribute is dropped and the bidi
-	// override characters behind Trojan Source are removed whether Safe is set
-	// or not. Raw passthrough is the deliberate exception - a `=html` block
-	// renders verbatim by design - so it is the one thing a document you did
-	// not author has to be able to switch off.
-	//
-	// Safe is a statement about the DOCUMENT, not about this package's
-	// configuration. In particular it does NOT constrain Symbols: a symbol
-	// value is substituted raw with Safe on exactly as it is with Safe off,
-	// because the map is processor configuration rather than page content.
-	// See the security note on Symbols.
-	//
-	// Set it for any tree whose pages can come from outside the site's own
-	// authors - a docs site taking contributions, or any build where a page
-	// can arrive in a pull request.
+	// RawHTML lets `=html` blocks and `{=html}` spans through verbatim. The
+	// Carve 0.2 default escapes them and applies the engine's URL policy, so
+	// leave it off for any tree whose pages can come from outside the site's
+	// own authors. It does NOT constrain Symbols: see the note there.
+	RawHTML bool
+
+	// Safe is the secure default of Carve 0.2 and is kept so existing
+	// configuration still reads. Setting it together with RawHTML is refused.
 	Safe bool
 
 	// Profile restricts what a document may contain and how large it may be.
@@ -101,19 +89,12 @@ type Options struct {
 	//
 	// CAPS. "comment" and "minimal" also cap the input, and the cap applies to
 	// the BODY handed to the engine - front matter is split off first and does
-	// not count toward it. Measured against the pinned engine: "comment"
-	// accepts 100000 bytes, "minimal" accepts 10000 bytes, and "full" and
-	// "article" have no cap under 4 MB. The count is bytes, not runes: 5001
-	// two-byte characters is 10001 bytes and is over the "minimal" cap.
-	//
-	// An over-cap body is a hard ERROR from ConvertWithOptions, never a page.
-	// See the profileMaxBytes comment for why this package refuses it itself
-	// rather than waiting for the engine to.
+	// not count toward it. The engine refuses an over-cap body with an error,
+	// so it never becomes a blank page.
 	Profile string
 
-	// CaptionHints makes Lint also report a caption-looking paragraph next to
-	// a table or image (the engine's opt-in caption-looking-paragraph rule).
-	// Rendering ignores it.
+	// CaptionHints was the 0.1 opt-in for the caption-looking-paragraph rule.
+	// That rule is on by default in Carve 0.2, so the field has no effect.
 	CaptionHints bool
 
 	// Symbols maps a shortcode name to the text `:NAME:` renders as. Carve
@@ -123,12 +104,9 @@ type Options struct {
 	// the engine's word-boundary rule is untouched by a populated map:
 	// `a:NAME:b` and `3:NAME:4` stay literal however the map is filled.
 	//
-	// The map is forwarded to the engine verbatim. It is deliberately not
-	// re-validated here: carve-go refuses an entry that cannot reach the
-	// engine intact (an empty name, a name containing "=", a NUL in either
-	// half) with its own message, and a second validation layer here could
-	// only disagree with it. Such an error surfaces through Convert rather
-	// than being swallowed or silently dropping the entry.
+	// The map is forwarded to the engine verbatim and not re-validated here:
+	// the engine refuses an entry it cannot accept with its own message, which
+	// surfaces through Convert rather than silently dropping the entry.
 	//
 	// SECURITY: values are substituted RAW, exactly as written, and are NOT
 	// escaped - that is what lets a symbol expand to markup such as an <img>
@@ -162,11 +140,33 @@ type Options struct {
 	// resolve against its directory.
 	//
 	// The file on disk holds Carve WITH its front matter, while the body
-	// handed to the engine has had that split off. carve-go serves the body it
-	// is given for this one path and the real tree for everything else, so the
-	// split costs nothing and relative includes still resolve from where the
-	// page actually lives.
+	// handed to the engine has had that split off. The engine reads the body
+	// it is given for this one path and the real tree for everything else, so
+	// relative includes still resolve from where the page actually lives.
+	//
+	// The Carve 0.2 engine in carve-go has no WASI include resolver yet, so
+	// a conversion with Includes set fails with a clear "not available yet"
+	// error (markup-carve/carve-go#115).
 	SourcePath string
+}
+
+// ErrExtensionsUnavailable reports that the Carve 0.2 engine in carve-go
+// cannot register the bundled extensions yet (markup-carve/carve-go#116).
+var ErrExtensionsUnavailable = errors.New("the bundled extensions are not available yet in the Carve 0.2 engine (markup-carve/carve-go#116)")
+
+// engineOptions maps this package's options to the 0.2 option set.
+func engineOptions(opts Options) (carve.Options, error) {
+	if opts.Safe && opts.RawHTML {
+		return carve.Options{}, errors.New("Safe and RawHTML contradict each other: Safe is the default, set RawHTML only for trusted pages")
+	}
+	if opts.Extensions {
+		return carve.Options{}, ErrExtensionsUnavailable
+	}
+	out := carve.Options{RawHTML: opts.RawHTML, Profile: opts.Profile, Symbols: opts.Symbols}
+	if opts.Static {
+		out.Mode = "static"
+	}
+	return out, nil
 }
 
 // ConvertWithOptions is Convert with explicit engine options.
@@ -177,12 +177,9 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 		return Result{}, err
 	}
 
-	carveOpts := carve.Options{Static: opts.Static, Safe: opts.Safe, Profile: opts.Profile, Symbols: opts.Symbols}
-	if opts.Extensions {
-		// carve-go v0.1.5 selects by registry key, one --extension per
-		// element, so the whole bundle has to be named. Static with no
-		// selection already implies the bundle and is left alone.
-		carveOpts.Extensions = bundleExtensions()
+	carveOpts, err := engineOptions(opts)
+	if err != nil {
+		return Result{}, err
 	}
 
 	var (
@@ -190,9 +187,7 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 		included carve.IncludeResult
 	)
 	if opts.Includes {
-		// An empty IncludeRoot or SourcePath is refused by carve-go, which
-		// requires both to be absolute. Restating the rule here would only
-		// produce a second message for the same refusal.
+		// carve-go refuses an empty or relative IncludeRoot or SourcePath.
 		included, err = carve.RenderWithIncludes(body, carve.OutputHTML, carveOpts, carve.Include{
 			Root:       opts.IncludeRoot,
 			SourcePath: opts.SourcePath,
@@ -202,17 +197,13 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 		html, err = carve.ToHTMLOptions(body, carveOpts)
 	}
 	if err != nil {
-		// The engine reports the cap it enforced but not which profile set
-		// it. The caller chose that profile, so name it here instead of
-		// relying on the engine to echo it back - carve-go 0.1.2 stopped.
+		// The engine reports the cap it enforced but not always which
+		// profile set it, so name the profile the caller chose.
 		if opts.Profile != "" {
-			return Result{}, fmt.Errorf("render carve body under profile %q: %w", opts.Profile, err)
+			return Result{}, fmt.Errorf("render %d-byte carve body under profile %q: %w", len(body), opts.Profile, err)
 		}
 
 		return Result{}, fmt.Errorf("render carve body: %w", err)
-	}
-	if err := checkProfileCap(opts.Profile, body, html); err != nil {
-		return Result{}, err
 	}
 	html = strings.TrimRight(html, "\n")
 
@@ -237,58 +228,6 @@ func ConvertWithOptions(source string, opts Options) (Result, error) {
 		Dependencies:       included.Dependencies,
 		SuppressedWarnings: included.SuppressedWarnings,
 	}, nil
-}
-
-// profileMaxBytes is the input cap each named profile enforces, in bytes of
-// the BODY handed to the engine. "full" and "article" are absent because they
-// cap nothing. The numbers are the engine's, measured against the pinned
-// carve-go (hugo-carve#20).
-//
-// A second copy of someone else's number is normally the wrong shape, and this
-// package has twice declined to re-validate what the engine already checks -
-// a symbol name, a profile name. Both of those come back as an ERROR, so
-// restating them here could only produce a competing message for the same
-// refusal. An over-cap body does not: the engine embedded in the pinned
-// carve-go answers it with an empty render, exit 0 and an empty stderr, so a
-// misconfigured build publishes a BLANK PAGE and nothing anywhere says why
-// (markup-carve/carve-rs#1190). For a preprocessor whose output Hugo serves,
-// that failure reaches readers and no one upstream sees it.
-//
-// So the guard fires on the LOSS, not on the length. It needs BOTH an
-// over-cap body and an empty render, which is what keeps a stale number from
-// rotting into a wrong refusal in either direction:
-//
-//   - the engine raises a cap: an over-cap body still renders, the render is
-//     not empty, and nothing is refused.
-//   - the engine lowers a cap: the engine refuses first, and its own error
-//     surfaces through ConvertWithOptions above.
-//   - the engine learns to refuse (carve-rs#1194 is that fix, and carve-go's
-//     embedded wasm predates it): the engine's error surfaces above and this
-//     guard stops firing on its own, with no change here.
-//
-// It also cannot mistake a body that legitimately renders to nothing - a page
-// whose body is only a `%% ... %%` comment renders empty with or without a
-// profile - because such a body is not over the cap.
-var profileMaxBytes = map[string]int{
-	"comment": 100_000,
-	"minimal": 10_000,
-}
-
-// checkProfileCap turns a silently discarded over-cap body into an error
-// naming the cap and the actual size. It returns nil for every other outcome,
-// including every profile that caps nothing.
-func checkProfileCap(profile, body, html string) error {
-	max, capped := profileMaxBytes[profile]
-	if !capped || len(body) <= max {
-		return nil
-	}
-	if strings.TrimSpace(html) != "" {
-		return nil
-	}
-	return fmt.Errorf(
-		"profile %q discarded the whole body: it is %d bytes and the %q profile caps input at %d bytes "+
-			"(front matter is not counted). Split the page, or render it with the \"article\" or \"full\" profile",
-		profile, len(body), profile, max)
 }
 
 // splitFrontMatter separates a leading front matter block from the body.

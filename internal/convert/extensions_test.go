@@ -1,11 +1,12 @@
 package convert
 
 import (
+	"errors"
 	"sort"
 	"strings"
 	"testing"
 
-	carve "github.com/markup-carve/carve-go"
+	carve "github.com/markup-carve/carve-go/v2"
 )
 
 // The spoiler construct renders differently with the extension on, which makes
@@ -57,6 +58,7 @@ func engineRegistryKeys(t *testing.T) []string {
 // out of -extensions, and a key removed fails here instead of making every page
 // an error.
 func TestBundleExtensionsIsTheWholeRegistry(t *testing.T) {
+	skipExtensions(t)
 	want := engineRegistryKeys(t)
 	got := bundleExtensions()
 
@@ -88,6 +90,7 @@ func missing(from, in []string) []string {
 // bundleExtensions hands out a copy, so a caller cannot truncate the package's
 // list through the slice it was given.
 func TestBundleExtensionsIsNotAliased(t *testing.T) {
+	skipExtensions(t)
 	first := bundleExtensions()
 	if len(first) == 0 {
 		t.Fatal("the bundle is empty")
@@ -104,6 +107,7 @@ func TestBundleExtensionsIsNotAliased(t *testing.T) {
 // This is the case that failed outright on carve-go v0.1.5 while the name "all"
 // was still being sent, with no page produced at all.
 func TestExtensionsEnablesTheBundle(t *testing.T) {
+	skipExtensions(t)
 	res, err := ConvertWithOptions(spoilerSource, Options{Extensions: true})
 	if err != nil {
 		t.Fatalf("ConvertWithOptions: %v", err)
@@ -117,6 +121,7 @@ func TestExtensionsEnablesTheBundle(t *testing.T) {
 // has to come back unenabled. Without this, the test above would also pass for
 // a bundle that happened to be the engine's default.
 func TestTheBundleIsWhatEnablesTheExtension(t *testing.T) {
+	skipExtensions(t)
 	var without []string
 	for _, k := range bundleExtensionKeys {
 		if k != "spoiler" {
@@ -147,11 +152,32 @@ func TestNoExtensionsLeavesTheBundleOff(t *testing.T) {
 // Static with no selection implies the bundle in carve-go, which is why
 // ConvertWithOptions no longer populates Extensions for it.
 func TestStaticStillEnablesTheBundle(t *testing.T) {
+	skipExtensions(t)
 	res, err := ConvertWithOptions(spoilerSource, Options{Static: true})
 	if err != nil {
 		t.Fatalf("ConvertWithOptions: %v", err)
 	}
 	if !strings.Contains(res.BodyHTML, spoilerOn) {
 		t.Errorf("-static no longer enables the bundle:\n%s", res.BodyHTML)
+	}
+}
+
+// skipExtensions names the engine gap that stops the bundle on the Carve 0.2
+// engine: carve-go cannot select the bundled extensions yet.
+func skipExtensions(t *testing.T) {
+	t.Helper()
+	t.Skip("bundled extensions not available yet in the Carve 0.2 engine: markup-carve/carve-go#116")
+}
+
+// TestExtensionsAreAClearErrorUntilTheEngineHasThem pins what -extensions does
+// until markup-carve/carve-go#116 lands: a refusal, never core Carve passed
+// off as the bundle.
+func TestExtensionsAreAClearErrorUntilTheEngineHasThem(t *testing.T) {
+	_, err := ConvertWithOptions(spoilerSource, Options{Extensions: true})
+	if !errors.Is(err, ErrExtensionsUnavailable) {
+		t.Fatalf("expected ErrExtensionsUnavailable, got %v", err)
+	}
+	if _, err := Lint(spoilerSource, Options{Extensions: true}); !errors.Is(err, ErrExtensionsUnavailable) {
+		t.Fatalf("expected ErrExtensionsUnavailable from Lint, got %v", err)
 	}
 }

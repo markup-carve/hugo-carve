@@ -267,17 +267,30 @@ func TestRun_SafeFlagReachesTheRenderedPage(t *testing.T) {
 	}
 }
 
-// TestRun_WithoutSafeFlagRawHTMLStillPassesThrough is the other half: the
-// default is what it has always been, so an existing site sees no change.
+// TestRun_WithoutSafeFlagRawHTMLStillPassesThrough is the other half. In Carve
+// 0.2 the default escapes raw HTML (U-076), so only --raw-html lets it through.
 func TestRun_WithoutSafeFlagRawHTMLStillPassesThrough(t *testing.T) {
 	content, devNull := safeFixture(t)
 
 	if err := run([]string{"--content", content, "--quiet"}, devNull, devNull); err != nil {
 		t.Fatalf("run error: %v", err)
 	}
+	if out := readPage(t, filepath.Join(content, "page.html")); strings.Contains(out, "<script>") {
+		t.Errorf("U-076: without --raw-html raw HTML should be escaped, got:\n%s", out)
+	}
+	if err := run([]string{"--content", content, "--quiet", "--raw-html"}, devNull, devNull); err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	out := readPage(t, filepath.Join(content, "page.html"))
 	if !strings.Contains(out, "<div class=\"x\"><script>alert(1)</script></div>") {
-		t.Errorf("without --safe raw HTML should still pass through, got:\n%s", out)
+		t.Errorf("with --raw-html raw HTML should pass through, got:\n%s", out)
+	}
+}
+
+func TestRun_SafeAndRawHTMLAreRefusedTogether(t *testing.T) {
+	content, devNull := safeFixture(t)
+	if err := run([]string{"--content", content, "--quiet", "--safe", "--raw-html"}, devNull, devNull); err == nil {
+		t.Fatal("expected --safe with --raw-html to be refused")
 	}
 }
 
@@ -495,6 +508,7 @@ func TestRun_IncludesOffLeavesTheDirectiveLiteral(t *testing.T) {
 // tell an absolutized default from one passed through, and the engine refuses
 // a relative root - so this is what proves the default is made absolute.
 func TestRun_IncludesExpandUnderTheContentRoot(t *testing.T) {
+	skipIncludes(t)
 	content := includeSite(t)
 	chdir(t, filepath.Dir(content))
 	runCLI(t, "--content", "content", "--includes", "--quiet")
@@ -528,6 +542,7 @@ func chdir(t *testing.T, dir string) {
 // typed root means the current directory. "." read against the content
 // directory would not reach ../shared, so only the cwd reading expands it.
 func TestRun_ARelativeIncludeRootResolvesAgainstTheWorkingDirectory(t *testing.T) {
+	skipIncludes(t)
 	site := t.TempDir()
 	content := filepath.Join(site, "content")
 	writeFile(t, filepath.Join(site, "shared", "frag.crv"), "Shared fragment.\n")
@@ -545,6 +560,7 @@ func TestRun_ARelativeIncludeRootResolvesAgainstTheWorkingDirectory(t *testing.T
 
 // TestRun_DepsManifestNamesWhatWasRead pins the manifest a build watches.
 func TestRun_DepsManifestNamesWhatWasRead(t *testing.T) {
+	skipIncludes(t)
 	content := includeSite(t)
 	manifest := filepath.Join(t.TempDir(), "deps.json")
 	runCLI(t, "--content", content, "--includes", "--deps", manifest, "--quiet")
@@ -586,6 +602,7 @@ func TestRun_DepsManifestNamesWhatWasRead(t *testing.T) {
 // TestRun_DepsManifestSeparatesWhatItCouldNotRead pins the half that cannot be
 // watched: no host path was ever established for it.
 func TestRun_DepsManifestSeparatesWhatItCouldNotRead(t *testing.T) {
+	skipIncludes(t)
 	content := includeSite(t)
 	writeFile(t, filepath.Join(content, "index.crv"), "{{ nope.crv }}\n")
 	manifest := filepath.Join(t.TempDir(), "deps.json")
@@ -616,6 +633,7 @@ func TestRun_DepsManifestSeparatesWhatItCouldNotRead(t *testing.T) {
 
 // TestRun_NoDepsManifestWithoutTheFlag keeps the default free of a new artifact.
 func TestRun_NoDepsManifestWithoutTheFlag(t *testing.T) {
+	skipIncludes(t)
 	content := includeSite(t)
 	runCLI(t, "--content", content, "--includes", "--quiet")
 	entries, err := os.ReadDir(content)

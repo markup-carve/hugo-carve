@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, next2]
   pull_request:
-    branches: [main]
+    branches: [main, next2]
 
 # Each job declares timeout-minutes so a hung step fails fast
 # instead of inheriting the 360-minute GitHub default.
@@ -67,8 +67,12 @@ jobs:
   # not on the absolute count, because only the difference is something a pull
   # request here can act on. See scripts/corpus-drift.sh for why, and for what
   # the residual means.
+  # next2 renders with the Carve 0.2 engine, and carve main's tests/corpus is
+  # the 0.1 corpus. Driving the 0.2 conformance examples through Convert is
+  # hugo-carve#59.
   corpus:
     name: What the pin costs, in documents
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
