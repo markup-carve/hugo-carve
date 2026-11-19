@@ -59,7 +59,6 @@ func TestLintStrict_CanonicalBreakIsClean(t *testing.T) {
 }
 
 func TestIncludes_TableRowsAndColumns(t *testing.T) {
-	skipIncludes(t)
 	content := filepath.Join(t.TempDir(), "content")
 	writeFile(t, filepath.Join(content, "data", "plans.csv"),
 		"Plan,Seats,Price\nStarter,1,0\n\"Team, annual\",10,99\nEnterprise,100,999\n")

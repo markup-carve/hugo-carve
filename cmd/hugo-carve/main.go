@@ -52,7 +52,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	outDir := fs.String("out", "", "output directory (default: in place, next to the source)")
 	clean := fs.Bool("clean", false, "remove generated .html outputs instead of building them")
 	quiet := fs.Bool("quiet", false, "suppress per-file log output")
-	extensions := fs.Bool("extensions", false, "enable the bundled extensions (diagram presets, details, spoiler, code-callouts, math); not available yet with the Carve 0.2 engine, so it is an error for now")
+	extensions := fs.Bool("extensions", false, "enable the bundled extensions (diagram presets, details, spoiler, code-callouts, math); the full 0.1 bundle awaits carve-rs#4342 and carve-rs#4343")
 	static := fs.Bool("static", false, "self-contained static HTML: render in the engine's static mode, which flattens interactive constructs")
 	safe := fs.Bool("safe", false, "escape raw HTML (=html blocks and {=html} spans); this is the default since Carve 0.2 and contradicts -raw-html")
 	rawHTML := fs.Bool("raw-html", false, "emit raw HTML (=html blocks and {=html} spans) verbatim; only for pages the site authored itself")

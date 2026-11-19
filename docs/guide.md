@@ -42,10 +42,8 @@ Includes are off unless `--includes` is set. Paths are confined to the content
 directory by default; `--include-root` selects a different containment root.
 `{{ file.crv @region:name }}` takes one marked region of a file, and
 `@rows` and `@cols` take records and columns of a CSV or TSV table include.
-`--deps` writes the dependency graph for watch tooling. The Carve 0.2 engine in
-carve-go has no include resolver yet
-([carve-go#115](https://github.com/markup-carve/carve-go/issues/115)), so
-`--includes` is an error until it lands.
+`--deps` writes the dependency graph for watch tooling. The pinned Carve 0.2
+engine expands includes under that containment root (C2-N-001).
 
 Raw HTML is escaped by default since Carve 0.2. `--raw-html` emits it verbatim;
 use it only for pages the site authored itself. Profiles add construct and size
@@ -58,9 +56,10 @@ hugo-carve --content content --profile article
 An over-limit page stops the build and produces no output file.
 
 `--extensions` enables the bundled extension set. The Carve 0.2 engine in
-carve-go cannot select it yet
-([carve-go#116](https://github.com/markup-carve/carve-go/issues/116)), so the
-flag is an error for now. `--static` renders in the engine's static mode, which
+carve-go can select standard extensions, while the full 0.1 bundle still waits
+on [carve-rs#4342](https://github.com/markup-carve/carve-rs/issues/4342)
+and [carve-rs#4343](https://github.com/markup-carve/carve-rs/issues/4343).
+The flag reports that gap. `--static` renders in the engine's static mode, which
 flattens interactive constructs so the generated HTML has no runtime
 dependency.
 

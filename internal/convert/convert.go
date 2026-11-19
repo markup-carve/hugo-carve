@@ -56,7 +56,7 @@ func Convert(source string) (Result, error) {
 type Options struct {
 	// Extensions enables the engine's bundled extensions (diagram presets,
 	// details, spoiler, code callouts, math and the rest). The Carve 0.2
-	// engine reached through carve-go cannot register them yet, so a
+	// engine reached through carve-go has only part of that bundle, so a
 	// conversion with Extensions set fails with ErrExtensionsUnavailable
 	// instead of silently rendering core Carve.
 	Extensions bool
@@ -144,15 +144,12 @@ type Options struct {
 	// it is given for this one path and the real tree for everything else, so
 	// relative includes still resolve from where the page actually lives.
 	//
-	// The Carve 0.2 engine in carve-go has no WASI include resolver yet, so
-	// a conversion with Includes set fails with a clear "not available yet"
-	// error (markup-carve/carve-go#115).
 	SourcePath string
 }
 
 // ErrExtensionsUnavailable reports that the Carve 0.2 engine in carve-go
-// cannot register the bundled extensions yet (markup-carve/carve-go#116).
-var ErrExtensionsUnavailable = errors.New("the bundled extensions are not available yet in the Carve 0.2 engine (markup-carve/carve-go#116)")
+// cannot provide the full bundle yet (markup-carve/carve-rs#4342 and #4343).
+var ErrExtensionsUnavailable = errors.New("the bundled extensions are not available yet in the Carve 0.2 engine (markup-carve/carve-rs#4342 and markup-carve/carve-rs#4343)")
 
 // engineOptions maps this package's options to the 0.2 option set.
 func engineOptions(opts Options) (carve.Options, error) {

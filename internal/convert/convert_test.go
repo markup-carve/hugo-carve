@@ -502,7 +502,7 @@ func TestConvertWithOptions_SafeOffIsUnchanged(t *testing.T) {
 // mode and the extensions are also on, which is the combination a hardened
 // site would actually run.
 func TestConvertWithOptions_SafeComposesWithTheOtherOptions(t *testing.T) {
-	// Extensions are left out until markup-carve/carve-go#116 lands.
+	// Extensions are left out until markup-carve/carve-rs#4342 and markup-carve/carve-rs#4343 lands.
 	res, err := ConvertWithOptions(rawHTMLSrc, Options{Safe: true, Static: true})
 	if err != nil {
 		t.Fatalf("ConvertWithOptions error: %v", err)
