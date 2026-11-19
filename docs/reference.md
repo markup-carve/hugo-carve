@@ -99,7 +99,7 @@ Converts *.crv files into Hugo HTML content pages.
   -deps file
         write the include dependencies of every page to this JSON file
   -extensions
-        enable the bundled extensions (diagram presets, details, spoiler, code-callouts, math); not available yet with the Carve 0.2 engine, so it is an error for now
+        enable the bundled extensions (diagram presets, details, spoiler, code-callouts, math); the full 0.1 bundle awaits carve-rs#4342 and carve-rs#4343
   -include-root directory
         containment root for includes (default: the content directory). A relative value resolves against the working directory
   -includes {{ path }}
@@ -133,8 +133,8 @@ Converts *.crv files into Hugo HTML content pages.
 - `--clean` removes the generated `.html` files (the inverse operation).
 - `--extensions` enables the engine's bundled extensions: diagram fences render
   as hydration elements (`<pre class="plantuml">`, ...) for a client-side or
-  build-step renderer. The Carve 0.2 engine in carve-go cannot select them yet
-  ([carve-go#116](https://github.com/markup-carve/carve-go/issues/116)), so the
+  build-step renderer. The full 0.1 bundle is still pending in Carve 0.2
+  ([carve-rs#4342](https://github.com/markup-carve/carve-rs/issues/4342), [carve-rs#4343](https://github.com/markup-carve/carve-rs/issues/4343)), so the
   flag is an error for now. Without it, diagram fences stay plain code blocks.
 - `--raw-html` emits raw HTML verbatim. Off by default; `--safe` names the
   default and is refused together with `--raw-html`. See
@@ -174,10 +174,8 @@ the build asks:
 hugo-carve --content content --includes
 ```
 
-> The Carve 0.2 engine in carve-go has no include resolver yet
-> ([carve-go#115](https://github.com/markup-carve/carve-go/issues/115)).
-> Until it lands, `--includes` stops the build with a "not available yet"
-> error; this section describes the behavior it restores.
+The pinned Carve 0.2 engine expands include directives under the selected
+containment root (C2-N-001).
 
 Paths resolve relative to the file that wrote them, and nothing resolves outside
 the containment root. The root is the content directory unless `--include-root`

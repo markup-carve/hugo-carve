@@ -508,7 +508,6 @@ func TestRun_IncludesOffLeavesTheDirectiveLiteral(t *testing.T) {
 // tell an absolutized default from one passed through, and the engine refuses
 // a relative root - so this is what proves the default is made absolute.
 func TestRun_IncludesExpandUnderTheContentRoot(t *testing.T) {
-	skipIncludes(t)
 	content := includeSite(t)
 	chdir(t, filepath.Dir(content))
 	runCLI(t, "--content", "content", "--includes", "--quiet")
@@ -542,7 +541,6 @@ func chdir(t *testing.T, dir string) {
 // typed root means the current directory. "." read against the content
 // directory would not reach ../shared, so only the cwd reading expands it.
 func TestRun_ARelativeIncludeRootResolvesAgainstTheWorkingDirectory(t *testing.T) {
-	skipIncludes(t)
 	site := t.TempDir()
 	content := filepath.Join(site, "content")
 	writeFile(t, filepath.Join(site, "shared", "frag.crv"), "Shared fragment.\n")
@@ -560,7 +558,6 @@ func TestRun_ARelativeIncludeRootResolvesAgainstTheWorkingDirectory(t *testing.T
 
 // TestRun_DepsManifestNamesWhatWasRead pins the manifest a build watches.
 func TestRun_DepsManifestNamesWhatWasRead(t *testing.T) {
-	skipIncludes(t)
 	content := includeSite(t)
 	manifest := filepath.Join(t.TempDir(), "deps.json")
 	runCLI(t, "--content", content, "--includes", "--deps", manifest, "--quiet")
@@ -602,7 +599,6 @@ func TestRun_DepsManifestNamesWhatWasRead(t *testing.T) {
 // TestRun_DepsManifestSeparatesWhatItCouldNotRead pins the half that cannot be
 // watched: no host path was ever established for it.
 func TestRun_DepsManifestSeparatesWhatItCouldNotRead(t *testing.T) {
-	skipIncludes(t)
 	content := includeSite(t)
 	writeFile(t, filepath.Join(content, "index.crv"), "{{ nope.crv }}\n")
 	manifest := filepath.Join(t.TempDir(), "deps.json")
@@ -633,7 +629,6 @@ func TestRun_DepsManifestSeparatesWhatItCouldNotRead(t *testing.T) {
 
 // TestRun_NoDepsManifestWithoutTheFlag keeps the default free of a new artifact.
 func TestRun_NoDepsManifestWithoutTheFlag(t *testing.T) {
-	skipIncludes(t)
 	content := includeSite(t)
 	runCLI(t, "--content", content, "--includes", "--quiet")
 	entries, err := os.ReadDir(content)

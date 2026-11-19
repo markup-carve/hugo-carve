@@ -138,7 +138,6 @@ func includeLintSite(t *testing.T) string {
 // With -includes the pass lints the included file too. The include site is
 // in the page, so it counts the front matter like any page position.
 func TestLint_FollowsIncludes(t *testing.T) {
-	skipIncludes(t)
 	content := includeLintSite(t)
 	logged, err := runCapture(t, "--content", content, "--quiet", "--includes", "--lint-strict")
 	if err == nil {
@@ -172,29 +171,26 @@ func TestLint_WithoutIncludesIgnoresIncludedFiles(t *testing.T) {
 	}
 }
 
-// -safe reads no files: includes stay literal and the lint pass opens none.
-func TestSafe_LeavesIncludesLiteralAndSaysSo(t *testing.T) {
-	t.Skip("0.1 coupling gone: in Carve 0.2 escaping raw HTML (U-076) no longer turns includes off; expansion itself waits on markup-carve/carve-go#115")
-	content := includeLintSite(t)
-	logged, err := runCapture(t, "--content", content, "--quiet", "--includes", "--safe", "--lint-strict")
+// U-076: escaping raw HTML does not disable include expansion.
+func TestSafe_StillExpandsIncludes(t *testing.T) {
+	content := filepath.Join(t.TempDir(), "content")
+	writeFile(t, filepath.Join(content, "parts", "frag.crv"), "Included text.\n")
+	writeFile(t, filepath.Join(content, "page.crv"), "{{ parts/frag.crv }}\n")
+	logged, err := runCapture(t, "--content", content, "--quiet", "--includes", "--safe")
 	if err != nil {
 		t.Fatalf("run: %v (%q)", err, logged)
-	}
-	if !strings.Contains(logged, "-safe reads no files") {
-		t.Errorf("expected the -safe note, got %q", logged)
 	}
 	out, readErr := os.ReadFile(filepath.Join(content, "page.html"))
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	if !strings.Contains(string(out), "{{ parts/frag.txt }}") {
-		t.Errorf("expected the directive to stay literal under -safe, got %q", out)
+	if !strings.Contains(string(out), "Included text.") {
+		t.Errorf("expected the include to expand under -safe, got %q", out)
 	}
 }
 
 // carve-go v0.1.8 carries carve-rs 0.1.11, which selects `@region:name`.
 func TestIncludes_SelectARegion(t *testing.T) {
-	skipIncludes(t)
 	content := filepath.Join(t.TempDir(), "content")
 	writeFile(t, filepath.Join(content, "snippet.crv"), "Before.\n\n%% #region keep\nKept line.\n%% #endregion keep\n\nAfter.\n")
 	writeFile(t, filepath.Join(content, "page.crv"), "{{ snippet.crv @region:keep }}\n")
@@ -212,7 +208,6 @@ func TestIncludes_SelectARegion(t *testing.T) {
 // An include the render could not expand is printed once, by the render, and
 // still fails -lint-strict.
 func TestLint_StrictFailsOnAnUnresolvedInclude(t *testing.T) {
-	skipIncludes(t)
 	content := filepath.Join(t.TempDir(), "content")
 	writeFile(t, filepath.Join(content, "page.crv"), "{{ missing.txt }}\n")
 	logged, err := runCapture(t, "--content", content, "--quiet", "--includes", "--lint-strict")
@@ -222,11 +217,4 @@ func TestLint_StrictFailsOnAnUnresolvedInclude(t *testing.T) {
 	if n := strings.Count(logged, "include-unresolved"); n != 1 {
 		t.Errorf("expected one report, got %d in %q", n, logged)
 	}
-}
-
-// skipIncludes names the engine gap that stops include expansion on the Carve
-// 0.2 engine: carve-go's WASI build has no include resolver yet.
-func skipIncludes(t *testing.T) {
-	t.Helper()
-	t.Skip("include expansion not available yet in the Carve 0.2 engine: markup-carve/carve-go#115")
 }

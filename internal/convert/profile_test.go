@@ -198,11 +198,18 @@ func TestConvert_UnknownProfileSurfacesTheEngineError(t *testing.T) {
 // error, so the guard is gone; TestConvert_OverCapBodyIsAnError covers the
 // refusal.
 func TestCheckProfileCap_DefersToARenderThatSucceeded(t *testing.T) {
-	t.Skip("0.2 engine refuses an over-cap body itself; the 0.1 host guard for carve-rs#1190 is gone")
+	res, err := ConvertWithOptions("Short body.\n", Options{Profile: "minimal"})
+	if err != nil || !strings.Contains(res.BodyHTML, "Short body.") {
+		t.Fatalf("a body under the profile cap should render, got %q, %v", res.BodyHTML, err)
+	}
 }
 
 func TestProfileMaxBytes_CoversOnlyTheCappedProfiles(t *testing.T) {
-	t.Skip("0.2 engine refuses an over-cap body itself; the 0.1 host guard for carve-rs#1190 is gone")
+	for _, profile := range []string{"comment", "minimal"} {
+		if _, err := ConvertWithOptions(pageOf(200_000), Options{Profile: profile}); err == nil {
+			t.Errorf("profile %q accepted an over-cap body", profile)
+		}
+	}
 }
 
 // TestConvert_RawHTMLPerProfile pins the row of the README table that is easiest

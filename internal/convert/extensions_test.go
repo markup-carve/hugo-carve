@@ -166,11 +166,11 @@ func TestStaticStillEnablesTheBundle(t *testing.T) {
 // engine: carve-go cannot select the bundled extensions yet.
 func skipExtensions(t *testing.T) {
 	t.Helper()
-	t.Skip("bundled extensions not available yet in the Carve 0.2 engine: markup-carve/carve-go#116")
+	t.Skip("bundled extensions not available yet in the Carve 0.2 engine: markup-carve/carve-rs#4342 and markup-carve/carve-rs#4343")
 }
 
 // TestExtensionsAreAClearErrorUntilTheEngineHasThem pins what -extensions does
-// until markup-carve/carve-go#116 lands: a refusal, never core Carve passed
+// until markup-carve/carve-rs#4342 and markup-carve/carve-rs#4343 lands: a refusal, never core Carve passed
 // off as the bundle.
 func TestExtensionsAreAClearErrorUntilTheEngineHasThem(t *testing.T) {
 	_, err := ConvertWithOptions(spoilerSource, Options{Extensions: true})

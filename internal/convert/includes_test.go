@@ -71,7 +71,6 @@ func TestIncludes_OffLeavesTheDirectiveLiteral(t *testing.T) {
 }
 
 func TestIncludes_OnExpandsTheDirective(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	body, opts := s.page(t, "index.crv", "{{ sub/frag.crv }}\n")
 	res, err := ConvertWithOptions(body, opts)
@@ -126,7 +125,6 @@ func TestIncludes_ARelativeRootIsRefused(t *testing.T) {
 }
 
 func TestIncludes_AWiderRootReachesTheEngine(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	body, opts := s.page(t, "index.crv", "{{ ../outside/secret.crv }}\n")
 	opts.IncludeRoot = s.root
@@ -142,7 +140,6 @@ func TestIncludes_AWiderRootReachesTheEngine(t *testing.T) {
 // --- denials -------------------------------------------------------------
 
 func TestIncludes_TraversalOutOfTheRootIsNotExpanded(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	body, opts := s.page(t, "index.crv", "{{ ../outside/secret.crv }}\n")
 	res, err := ConvertWithOptions(body, opts)
@@ -154,28 +151,26 @@ func TestIncludes_TraversalOutOfTheRootIsNotExpanded(t *testing.T) {
 	}
 }
 
-// Spec I7: a refusal and a missing file report the same rule, so a rendered
-// page cannot be used to tell them apart.
+// C2-N-061 and C2-H-133: each cause and its render loss are reported.
 func TestIncludes_ARefusalAndAMissingFileReportTheSameRule(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	body, opts := s.page(t, "index.crv", "{{ ../outside/secret.crv }}\n\n{{ nope.crv }}\n")
 	res, err := ConvertWithOptions(body, opts)
 	if err != nil {
 		t.Fatalf("ConvertWithOptions: %v", err)
 	}
-	if len(res.Warnings) != 2 {
-		t.Fatalf("expected two warnings, got %d: %+v", len(res.Warnings), res.Warnings)
-	}
+	want := map[string]int{"include-outside-root": 1, "include-not-found": 1, "include-unresolved": 2}
 	for _, w := range res.Warnings {
-		if w.Rule != "include-unresolved" {
-			t.Errorf("expected include-unresolved, got %q", w.Rule)
+		want[w.Rule]--
+	}
+	for rule, count := range want {
+		if count != 0 {
+			t.Errorf("expected the 0.2 cause and loss reports, %s differs by %d: %+v", rule, count, res.Warnings)
 		}
 	}
 }
 
 func TestIncludes_ARefusalCarriesNoHostPath(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	body, opts := s.page(t, "index.crv", "{{ ../outside/secret.crv }}\n")
 	res, err := ConvertWithOptions(body, opts)
@@ -195,7 +190,6 @@ func TestIncludes_ARefusalCarriesNoHostPath(t *testing.T) {
 // --- dependencies --------------------------------------------------------
 
 func TestIncludes_AReadTargetIsReportedAsAHostPath(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	body, opts := s.page(t, "index.crv", "{{ sub/frag.crv }}\n")
 	res, err := ConvertWithOptions(body, opts)
@@ -205,7 +199,7 @@ func TestIncludes_AReadTargetIsReportedAsAHostPath(t *testing.T) {
 	want := filepath.Join(s.content, "sub", "frag.crv")
 	var found bool
 	for _, d := range res.Dependencies {
-		if d.Resolved && d.Path == want {
+		if d.Resolved && d.HostPath == want {
 			found = true
 		}
 	}
@@ -215,7 +209,6 @@ func TestIncludes_AReadTargetIsReportedAsAHostPath(t *testing.T) {
 }
 
 func TestIncludes_ARefusedTargetIsReportedUnresolved(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	body, opts := s.page(t, "index.crv", "{{ nope.crv }}\n")
 	res, err := ConvertWithOptions(body, opts)
@@ -246,7 +239,6 @@ func TestIncludes_NoDependenciesWhileExpansionIsOff(t *testing.T) {
 
 // The page's own identity, not the root, is what a sibling resolves against.
 func TestIncludes_APathResolvesAgainstThePageThatWroteIt(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	body, opts := s.page(t, "sub/page.crv", "{{ frag.crv }}\n")
 	res, err := ConvertWithOptions(body, opts)
@@ -259,7 +251,6 @@ func TestIncludes_APathResolvesAgainstThePageThatWroteIt(t *testing.T) {
 }
 
 func TestIncludes_ANestedPathResolvesAgainstTheIncludingFile(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	write(t, filepath.Join(s.content, "sub", "deep", "inner.crv"), "Innermost body here.\n")
 	write(t, filepath.Join(s.content, "sub", "frag.crv"), "{{ deep/inner.crv }}\n")
@@ -274,16 +265,16 @@ func TestIncludes_ANestedPathResolvesAgainstTheIncludingFile(t *testing.T) {
 }
 
 func TestIncludes_ACycleDegradesInsteadOfHanging(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
-	write(t, filepath.Join(s.content, "a.crv"), "Alpha {{ b.crv }}\n")
-	write(t, filepath.Join(s.content, "b.crv"), "Beta {{ a.crv }}\n")
+	// C2-N-002 expands block directives, never an inline mention.
+	write(t, filepath.Join(s.content, "a.crv"), "Alpha\n\n{{ b.crv }}\n")
+	write(t, filepath.Join(s.content, "b.crv"), "Beta\n\n{{ a.crv }}\n")
 	body, opts := s.page(t, "index.crv", "{{ a.crv }}\n")
 	res, err := ConvertWithOptions(body, opts)
 	if err != nil {
 		t.Fatalf("ConvertWithOptions: %v", err)
 	}
-	if !strings.Contains(res.BodyHTML, "Alpha Beta") {
+	if !strings.Contains(res.BodyHTML, "Alpha") || !strings.Contains(res.BodyHTML, "Beta") {
 		t.Errorf("expected the partial expansion, got %q", res.BodyHTML)
 	}
 	var cycle bool
@@ -301,7 +292,6 @@ func TestIncludes_ACycleDegradesInsteadOfHanging(t *testing.T) {
 // file on disk still carries it. The mount serves the body for the document's
 // own path, so both halves have to hold at once.
 func TestIncludes_FrontMatterIsSplitOffAndTheDirectiveStillResolves(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	source := "+++\ntitle = \"T\"\n+++\n\n{{ sub/frag.crv }}\n"
 	path := write(t, filepath.Join(s.content, "index.crv"), source)
@@ -324,7 +314,6 @@ func TestIncludes_FrontMatterIsSplitOffAndTheDirectiveStillResolves(t *testing.T
 
 // Every render option the page is parsed with reaches an included child too.
 func TestIncludes_TheSymbolMapReachesAnIncludedChild(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	write(t, filepath.Join(s.content, "sub", "frag.crv"), "Fragment with :crv:\n")
 	body, opts := s.page(t, "index.crv", "{{ sub/frag.crv }}\n")
@@ -339,7 +328,6 @@ func TestIncludes_TheSymbolMapReachesAnIncludedChild(t *testing.T) {
 }
 
 func TestIncludes_TheProfileGovernsAnIncludedChild(t *testing.T) {
-	skipIncludes(t)
 	s := newSite(t)
 	write(t, filepath.Join(s.content, "sub", "frag.crv"), "a [home](https://example.com/x) b\n")
 	body, opts := s.page(t, "index.crv", "{{ sub/frag.crv }}\n")
@@ -351,29 +339,24 @@ func TestIncludes_TheProfileGovernsAnIncludedChild(t *testing.T) {
 	if strings.Contains(res.BodyHTML, "<a ") {
 		t.Errorf("the profile should have filtered the child's link, got %q", res.BodyHTML)
 	}
-	if !strings.Contains(res.BodyHTML, "home") {
-		t.Errorf("the child should still have been included, got %q", res.BodyHTML)
+	// C2-N-077 degrades the include node under the minimal profile.
+	if strings.Contains(res.BodyHTML, "home") || !strings.Contains(res.BodyHTML, "{{ sub/frag.crv }}") {
+		t.Errorf("the include should have degraded under minimal, got %q", res.BodyHTML)
 	}
 }
 
-// skipIncludes names the engine gap that stops include expansion on the Carve
-// 0.2 engine: carve-go's WASI build has no include resolver yet.
-func skipIncludes(t *testing.T) {
-	t.Helper()
-	t.Skip("include expansion not available yet in the Carve 0.2 engine: markup-carve/carve-go#115")
-}
-
-// TestIncludes_TheGapIsAClearError pins what -includes does until
-// markup-carve/carve-go#115 lands: a refusal that says why, never a page with
-// the directive silently left literal.
-func TestIncludes_TheGapIsAClearError(t *testing.T) {
+// C2-N-001: the engine expands a named file when includes are enabled.
+func TestIncludes_TheEngineExpandsTheFile(t *testing.T) {
 	root := t.TempDir()
-	_, err := ConvertWithOptions("{{ part.crv }}\n", Options{
+	if err := os.WriteFile(filepath.Join(root, "part.crv"), []byte("From the engine.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := ConvertWithOptions("{{ part.crv }}\n", Options{
 		Includes:    true,
 		IncludeRoot: root,
 		SourcePath:  filepath.Join(root, "page.crv"),
 	})
-	if err == nil || !strings.Contains(err.Error(), "not available yet") {
-		t.Fatalf("expected the include gap to be a clear error, got %v", err)
+	if err != nil || !strings.Contains(res.BodyHTML, "From the engine.") {
+		t.Fatalf("expected include expansion, got %q, %v", res.BodyHTML, err)
 	}
 }
