@@ -52,16 +52,17 @@ func run(args []string, stdout, stderr *os.File) error {
 	outDir := fs.String("out", "", "output directory (default: in place, next to the source)")
 	clean := fs.Bool("clean", false, "remove generated .html outputs instead of building them")
 	quiet := fs.Bool("quiet", false, "suppress per-file log output")
-	extensions := fs.Bool("extensions", false, "enable the bundled extensions (diagram presets - mermaid, plantuml, d2, graphviz, ... - plus details, spoiler, code-callouts, color, math)")
-	static := fs.Bool("static", false, "self-contained static HTML: flatten interactive constructs and degrade diagrams/math to source (implies -extensions)")
-	safe := fs.Bool("safe", false, "escape raw HTML (=html blocks and {=html} spans) instead of emitting it; set this for content the site did not author")
-	profile := fs.String("profile", "", "engine profile restricting what a document may contain and how large it may be: `full|article|comment|minimal` (default: off, the engine's full behavior). comment and minimal also cap the body at 100000 and 10000 bytes; an over-cap page is an error, never a blank page")
+	extensions := fs.Bool("extensions", false, "enable the bundled extensions (diagram presets, details, spoiler, code-callouts, math); not available yet with the Carve 0.2 engine, so it is an error for now")
+	static := fs.Bool("static", false, "self-contained static HTML: render in the engine's static mode, which flattens interactive constructs")
+	safe := fs.Bool("safe", false, "escape raw HTML (=html blocks and {=html} spans); this is the default since Carve 0.2 and contradicts -raw-html")
+	rawHTML := fs.Bool("raw-html", false, "emit raw HTML (=html blocks and {=html} spans) verbatim; only for pages the site authored itself")
+	profile := fs.String("profile", "", "engine profile restricting what a document may contain and how large it may be: `full|article|comment|minimal` (default: off, the engine's full behavior). comment and minimal also cap the body; an over-cap page is an error, never a blank page")
 	includes := fs.Bool("includes", false, "expand `{{ path }}` includes from disk, contained to -include-root")
 	includeRoot := fs.String("include-root", "", "containment root for includes (default: the content `directory`). A relative value resolves against the working directory")
 	depsFile := fs.String("deps", "", "write the include dependencies of every page to this JSON `file`")
 	lint := fs.Bool("lint", false, "report the engine's lint findings for every page on stderr, one line each; pages are still converted")
 	lintStrict := fs.Bool("lint-strict", false, "like -lint, and exit 1 when any page has a finding (implies -lint)")
-	captionHints := fs.Bool("caption-hints", false, "also report a caption-looking paragraph next to a table or image (implies -lint)")
+	captionHints := fs.Bool("caption-hints", false, "implies -lint; the caption-looking-paragraph rule it enabled in 0.1 is on by default since Carve 0.2")
 	var symbolFiles repeatable
 	fs.Var(&symbolFiles, "symbols", "path to a JSON `file` mapping a symbol name to what :name: renders as (repeatable; merged left to right)")
 	var symbolPairs repeatable
@@ -104,8 +105,8 @@ func run(args []string, stdout, stderr *os.File) error {
 		root = abs
 	}
 
-	if *safe && *includes {
-		fmt.Fprintln(stderr, "hugo-carve: -safe reads no files, so -includes leaves every {{ path }} directive literal")
+	if *safe && *rawHTML {
+		return fmt.Errorf("-safe and -raw-html contradict each other: -safe is the default, drop it")
 	}
 
 	c := &converter{
@@ -116,6 +117,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		extensions:   *extensions,
 		static:       *static,
 		safe:         *safe,
+		rawHTML:      *rawHTML,
 		profile:      *profile,
 		symbols:      symbols,
 		includes:     *includes,
@@ -146,6 +148,7 @@ type converter struct {
 	extensions   bool
 	static       bool
 	safe         bool
+	rawHTML      bool
 	profile      string
 	symbols      map[string]string
 	includes     bool
@@ -331,6 +334,7 @@ func (c *converter) convertFile(src string) error {
 		Extensions:   c.extensions,
 		Static:       c.static,
 		Safe:         c.safe,
+		RawHTML:      c.rawHTML,
 		Profile:      c.profile,
 		Symbols:      c.symbols,
 		Includes:     c.includes,
@@ -388,12 +392,7 @@ func (c *converter) lintFile(src, source string, opts convert.Options) error {
 			fmt.Fprintf(c.warn, "hugo-carve: %s:%d:%d: %s: %s\n", src, f.Line, f.Column, f.Rule, f.Message)
 			continue
 		}
-		sites := make([]string, 0, len(f.IncludedBy))
-		for _, s := range f.IncludedBy {
-			sites = append(sites, fmt.Sprintf("%s:%d:%d", s.File, s.Line, s.Column))
-		}
-		fmt.Fprintf(c.warn, "hugo-carve: %s: %s:%d:%d: %s: %s (included at %s)\n",
-			src, f.File, f.Line, f.Column, f.Rule, f.Message, strings.Join(sites, ", "))
+		fmt.Fprintf(c.warn, "hugo-carve: %s: %s:%d:%d: %s: %s\n", src, f.File, f.Line, f.Column, f.Rule, f.Message)
 	}
 	return nil
 }
@@ -417,7 +416,7 @@ func (c *converter) recordIncludes(src string, res convert.Result) {
 	entry := pageDeps{Page: src, Targets: []string{}, Incomplete: res.SuppressedWarnings > 0}
 	for _, d := range res.Dependencies {
 		if d.Resolved {
-			entry.Targets = append(entry.Targets, d.Path)
+			entry.Targets = append(entry.Targets, d.HostPath)
 			continue
 		}
 		entry.Unresolved = append(entry.Unresolved, d.Path)

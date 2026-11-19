@@ -67,6 +67,7 @@ func TestNameLookup_AWronglyCasedCollapsedReferenceIsLiteral(t *testing.T) {
 // literal on carve-go v0.1.3 as well. Pinned here so the two rules cannot
 // drift apart later, and recorded as unchanged rather than claimed as new.
 func TestNameLookup_AnIncludeSelectorComparesCaseExactly(t *testing.T) {
+	skipIncludes(t)
 	s := newSite(t)
 	write(t, filepath.Join(s.content, "sub", "cased.crv"), "# Alpha\n\nAlpha body.\n")
 

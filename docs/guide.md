@@ -41,12 +41,15 @@ a Carve source or include changes.
 Includes are off unless `--includes` is set. Paths are confined to the content
 directory by default; `--include-root` selects a different containment root.
 `{{ file.crv @region:name }}` takes one marked region of a file, and
-`@rows` and `@cols` take records and columns of a CSV or TSV table include. `--safe` turns
-includes off, so no file is read for untrusted content.
-`--deps` writes the dependency graph for watch tooling.
+`@rows` and `@cols` take records and columns of a CSV or TSV table include.
+`--deps` writes the dependency graph for watch tooling. The Carve 0.2 engine in
+carve-go has no include resolver yet
+([carve-go#115](https://github.com/markup-carve/carve-go/issues/115)), so
+`--includes` is an error until it lands.
 
-Use `--safe` for content that the site does not control. It escapes raw HTML.
-Profiles add construct and size limits:
+Raw HTML is escaped by default since Carve 0.2. `--raw-html` emits it verbatim;
+use it only for pages the site authored itself. Profiles add construct and size
+limits:
 
 ```bash
 hugo-carve --content content --profile article
@@ -54,9 +57,12 @@ hugo-carve --content content --profile article
 
 An over-limit page stops the build and produces no output file.
 
-`--extensions` enables the bundled extension set. `--static` also enables the
-set, then flattens interactive constructs and degrades diagrams and math to
-source so the generated HTML has no runtime dependency.
+`--extensions` enables the bundled extension set. The Carve 0.2 engine in
+carve-go cannot select it yet
+([carve-go#116](https://github.com/markup-carve/carve-go/issues/116)), so the
+flag is an error for now. `--static` renders in the engine's static mode, which
+flattens interactive constructs so the generated HTML has no runtime
+dependency.
 
 Symbol files and repeated `--symbol NAME=VALUE` flags configure `:name:`
 shortcodes. Symbol values are trusted output and must not come from untrusted
@@ -77,12 +83,12 @@ hugo-carve: content/post.crv:3:1: unattached-block-attribute: This block attribu
 ```
 
 With `--includes`, the linter also checks every included Carve file and names
-the include site of each finding there.
+the file of each finding there.
 
 The engine's default rules include hints for non-canonical spellings, such as
-a `---` thematic break where Carve writes `***`. Findings carry no severity, so
-`--lint-strict` fails on these hints as well. `--caption-hints` adds the opt-in
-check for a caption-looking paragraph next to a table or image.
+a `---` thematic break where Carve writes `***`, and a caption-looking
+paragraph next to a table or image. `--lint-strict` fails on these hints as
+well. `--caption-hints` only implies `--lint` since Carve 0.2.
 
 Aligned table formatting is not exposed: hugo-carve renders HTML and does not
 format Carve.
@@ -100,8 +106,8 @@ allowContent = ['^text/html$']
 
 `ignoreFiles` keeps raw Carve sources out of `public/`, and `allowContent`
 permits generated HTML content pages. Keep `ignoreFiles` above `[security]`:
-below it, TOML reads it as `security.ignoreFiles` and Hugo ignores it. Use
-`hugo-carve --safe` to control raw HTML authored in Carve.
+below it, TOML reads it as `security.ignoreFiles` and Hugo ignores it. Raw HTML
+authored in Carve is escaped unless you run `hugo-carve --raw-html`.
 
 Load Carve's stylesheet and wrap content with `.carve-content` when using
 styled extensions. See [Styling](reference.md#styling).

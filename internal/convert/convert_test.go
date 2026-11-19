@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	carve "github.com/markup-carve/carve-go"
+	carve "github.com/markup-carve/carve-go/v2"
 )
 
 // TestConvert_BodyHTML verifies that the Carve body is rendered to HTML with
@@ -147,6 +147,7 @@ func TestConvert_LeadingBraceIsBodyNotFrontMatter(t *testing.T) {
 // replace the literal angle-bracket token with a <b class="callout"> element,
 // and the callout list below the block becomes an <ol class="callouts">.
 func TestCarveGo_CodeCallouts(t *testing.T) {
+	skipExtensions(t)
 	src := "```go\nx := 1 // <1>\ny := 2 // <2>\n```\n\n<1> assign x\n<2> assign y\n"
 	html, err := carve.ToHTMLOptions(src, carve.Options{Extensions: bundleExtensions()})
 	if err != nil {
@@ -200,6 +201,7 @@ func min(a, b int) int {
 // renders as a hydration element only when Extensions is set (core Carve leaves
 // it a plain code block).
 func TestConvertWithOptions_ExtensionsEnableDiagrams(t *testing.T) {
+	skipExtensions(t)
 	src := "``` plantuml\nA -> B\n```\n"
 
 	off, err := Convert(src)
@@ -353,26 +355,21 @@ func TestConvertWithOptions_SymbolsSubstituteRaw(t *testing.T) {
 }
 
 // TestConvertWithOptions_SymbolsSurfaceEngineError pins that this package adds
-// no validation layer of its own AND swallows none of the engine's. carve-go
-// refuses an entry that cannot reach the engine intact; the caller has to see
-// that message rather than a silently shorter map.
+// no validation layer of its own. The 0.1 CLI boundary refused entries it could
+// not encode (a "=", an empty name, a NUL). The 0.2 JSON call carries the map as
+// a JSON object (C2-H-124), so those entries reach the engine and render.
 func TestConvertWithOptions_SymbolsSurfaceEngineError(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		symbols map[string]string
-		want    string
 	}{
-		{"name contains =", map[string]string{"a=b": "c"}, `must not contain "="`},
-		{"empty name", map[string]string{"": "x"}, "must not be empty"},
-		{"NUL in value", map[string]string{"n": "v\x00"}, "must not contain a NUL"},
+		{"name contains =", map[string]string{"a=b": "c"}},
+		{"empty name", map[string]string{"": "x"}},
+		{"NUL in value", map[string]string{"n": "v\x00"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := ConvertWithOptions("A :a: here\n", Options{Symbols: tc.symbols})
-			if err == nil {
-				t.Fatalf("expected the engine to refuse %v, got no error", tc.symbols)
-			}
-			if !strings.Contains(err.Error(), tc.want) {
-				t.Errorf("expected the engine's own message containing %q, got: %v", tc.want, err)
+			if _, err := ConvertWithOptions("A :a: here\n", Options{Symbols: tc.symbols}); err != nil {
+				t.Fatalf("C2-H-124: the 0.2 JSON boundary should carry %v, got: %v", tc.symbols, err)
 			}
 		})
 	}
@@ -455,9 +452,9 @@ func TestConvertWithOptions_SafeLeavesEverythingElseAlone(t *testing.T) {
 	}
 }
 
-// TestConvertWithOptions_SafeOffIsUnchanged pins the default byte for byte. An
-// additive option that quietly changed the output every existing site already
-// gets would be a breaking change wearing a feature's clothes.
+// TestConvertWithOptions_SafeOffIsUnchanged pins the default byte for byte. In
+// Carve 0.2 the default escapes raw HTML (U-076, C2-H-050), so the zero value
+// and an explicit Safe render the same; only RawHTML lets it through (C2-H-053).
 func TestConvertWithOptions_SafeOffIsUnchanged(t *testing.T) {
 	const src = "+++\ntitle = \"S\"\n+++\n\n" +
 		"```=html\n<div class=\"x\">raw</div>\n```\n\nAnd *bold*.\n"
@@ -466,8 +463,18 @@ func TestConvertWithOptions_SafeOffIsUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Convert error: %v", err)
 	}
-	if !strings.Contains(base.BodyHTML, "<div class=\"x\">raw</div>") {
-		t.Fatalf("without Safe, raw HTML should pass through, got:\n%s", base.BodyHTML)
+	if strings.Contains(base.BodyHTML, "<div class=\"x\">raw</div>") {
+		t.Fatalf("U-076: by default raw HTML should be escaped, got:\n%s", base.BodyHTML)
+	}
+	raw, err := ConvertWithOptions(src, Options{RawHTML: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions error: %v", err)
+	}
+	if !strings.Contains(raw.BodyHTML, "<div class=\"x\">raw</div>") {
+		t.Fatalf("C2-H-053: with RawHTML, raw HTML should pass through, got:\n%s", raw.BodyHTML)
+	}
+	if _, err := ConvertWithOptions(src, Options{RawHTML: true, Safe: true}); err == nil {
+		t.Fatal("Safe together with RawHTML should be refused")
 	}
 
 	for _, tc := range []struct {
@@ -476,6 +483,7 @@ func TestConvertWithOptions_SafeOffIsUnchanged(t *testing.T) {
 	}{
 		{"zero value", Options{}},
 		{"explicitly off", Options{Safe: false}},
+		{"safe, the 0.2 default", Options{Safe: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := ConvertWithOptions(src, tc.opts)
@@ -494,7 +502,8 @@ func TestConvertWithOptions_SafeOffIsUnchanged(t *testing.T) {
 // mode and the extensions are also on, which is the combination a hardened
 // site would actually run.
 func TestConvertWithOptions_SafeComposesWithTheOtherOptions(t *testing.T) {
-	res, err := ConvertWithOptions(rawHTMLSrc, Options{Safe: true, Static: true, Extensions: true})
+	// Extensions are left out until markup-carve/carve-go#116 lands.
+	res, err := ConvertWithOptions(rawHTMLSrc, Options{Safe: true, Static: true})
 	if err != nil {
 		t.Fatalf("ConvertWithOptions error: %v", err)
 	}
