@@ -91,7 +91,8 @@ func TestNameLookup_AnIncludeSelectorComparesCaseExactly(t *testing.T) {
 	// IncludeWarning.Rule doc comment lists "include-section-missing" instead,
 	// which is markup-carve/carve-go's to reconcile; this asserts the value
 	// measured from the pinned artifact.
-	if len(res.Warnings) != 1 || res.Warnings[0].Rule != "include-section" {
-		t.Errorf("expected one include-section warning, got %v", res.Warnings)
+	// C2-N-061 and C2-H-133 report the failed selection and render loss.
+	if len(res.Warnings) != 2 || res.Warnings[0].Rule != "include-section" || res.Warnings[1].Rule != "include-unresolved" {
+		t.Errorf("expected selection and loss warnings, got %v", res.Warnings)
 	}
 }

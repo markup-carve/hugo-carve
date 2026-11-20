@@ -107,6 +107,7 @@ func TestLint_NotRunByClean(t *testing.T) {
 // does not report a fragment link as broken. That difference is what shows
 // -extensions reaching the lint pass.
 func TestLint_ExtensionsReachTheLintPass(t *testing.T) {
+	t.Skip("0.2 lint reads no extensions (C2-W-109)")
 	content := lintSite(t, "[x](#nope)\n")
 	logged, _ := runCapture(t, "--content", content, "--quiet", "--lint")
 	if !strings.Contains(logged, "broken-fragment-link") {
@@ -143,8 +144,10 @@ func TestLint_FollowsIncludes(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected -lint-strict to fail on the included finding")
 	}
+	// The 0.2 diagnostic record has no include chain (markup-carve/carve-go#115),
+	// so the line names the included file without its "(included at ...)" site.
 	want := "page.crv: parts/frag.txt:3:1: unattached-block-attribute: "
-	if !strings.Contains(logged, want) || !strings.Contains(logged, "(included at page.crv:6:1)") {
+	if !strings.Contains(logged, want) {
 		t.Errorf("expected %q with its site, got %q", want, logged)
 	}
 	if n := strings.Count(logged, "include-unresolved"); n != 1 {
@@ -152,33 +155,38 @@ func TestLint_FollowsIncludes(t *testing.T) {
 	}
 }
 
+// C2-N-003: with no resolver every directive is reported as
+// include-no-resolver, so the run uses -lint, not -lint-strict, and checks that
+// no finding is positioned inside the included file.
 func TestLint_WithoutIncludesIgnoresIncludedFiles(t *testing.T) {
 	content := includeLintSite(t)
-	logged, err := runCapture(t, "--content", content, "--quiet", "--lint-strict")
+	logged, err := runCapture(t, "--content", content, "--quiet", "--lint")
 	if err != nil {
 		t.Fatalf("run: %v (%q)", err, logged)
 	}
-	if strings.Contains(logged, "frag.txt") {
+	if !strings.Contains(logged, "include-no-resolver") {
+		t.Errorf("C2-N-003: expected include-no-resolver for the unexpanded directives, got %q", logged)
+	}
+	if strings.Contains(logged, "frag.txt:") {
 		t.Errorf("lint followed an include with -includes off: %q", logged)
 	}
 }
 
-// -safe reads no files: includes stay literal and the lint pass opens none.
-func TestSafe_LeavesIncludesLiteralAndSaysSo(t *testing.T) {
-	content := includeLintSite(t)
-	logged, err := runCapture(t, "--content", content, "--quiet", "--includes", "--safe", "--lint-strict")
+// U-076: escaping raw HTML does not disable include expansion.
+func TestSafe_StillExpandsIncludes(t *testing.T) {
+	content := filepath.Join(t.TempDir(), "content")
+	writeFile(t, filepath.Join(content, "parts", "frag.crv"), "Included text.\n")
+	writeFile(t, filepath.Join(content, "page.crv"), "{{ parts/frag.crv }}\n")
+	logged, err := runCapture(t, "--content", content, "--quiet", "--includes", "--safe")
 	if err != nil {
 		t.Fatalf("run: %v (%q)", err, logged)
-	}
-	if !strings.Contains(logged, "-safe reads no files") {
-		t.Errorf("expected the -safe note, got %q", logged)
 	}
 	out, readErr := os.ReadFile(filepath.Join(content, "page.html"))
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	if !strings.Contains(string(out), "{{ parts/frag.txt }}") {
-		t.Errorf("expected the directive to stay literal under -safe, got %q", out)
+	if !strings.Contains(string(out), "Included text.") {
+		t.Errorf("expected the include to expand under -safe, got %q", out)
 	}
 }
 

@@ -10,14 +10,17 @@ import (
 
 const captionAfterTable = "|= A |\n| x |\n\nTable 1: caption\n"
 
+// caption-looking-paragraph is on by default in Carve 0.2 (UPGRADING.md, the
+// `lint --caption-hints` row; spec/0.2/data/lint-rules.json), so plain -lint
+// reports it without -caption-hints.
 func TestCaptionHints_OffWithoutTheFlag(t *testing.T) {
 	content := lintSite(t, captionAfterTable)
 	logged, err := runCapture(t, "--content", content, "--quiet", "--lint")
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if strings.Contains(logged, "caption-looking-paragraph") {
-		t.Errorf("caption hint reported without -caption-hints: %q", logged)
+	if !strings.Contains(logged, "caption-looking-paragraph") {
+		t.Errorf("0.2 reports the caption hint by default: %q", logged)
 	}
 }
 
