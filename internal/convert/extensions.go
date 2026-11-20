@@ -5,9 +5,7 @@ import carve "github.com/markup-carve/carve-go/v2"
 // The Carve 0.2 standard extensions that make up the bundle: every name in
 // carve.StandardExtensions except carve.inlineFootnotesToParentheses, which
 // rewrites footnotes and was never part of the 0.1 bundle, plus the dot and
-// puml fence words of the graphviz and plantuml presets. The 0.1 navigation
-// extensions (heading permalinks, toc, external links, autolink) have no 0.2
-// counterpart in carve-rs yet (markup-carve/carve-rs#4476).
+// puml fence words of the graphviz and plantuml presets.
 var bundleExtensionKeys = func() []string {
 	var keys []string
 	for _, name := range carve.StandardExtensions {

@@ -219,3 +219,42 @@ func TestExtensionsClaimTheDotFence(t *testing.T) {
 		t.Errorf("the dot fence was not claimed:\n%s", res.BodyHTML)
 	}
 }
+
+// The 0.1 bundle carried the navigation extensions; the 0.2 one does again.
+func TestExtensionsRenderTheNavigationExtensions(t *testing.T) {
+	src := "# Intro\n\n::: toc\n:::\n\n## Part\n\nSee https://example.org and [x](https://ext.org).\n"
+	res, err := ConvertWithOptions(src, Options{Extensions: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions: %v", err)
+	}
+	for _, want := range []string{
+		`class="permalink"`,
+		`<span class="section-number">1.1</span>`,
+		`<nav class="toc"`,
+		`<a href="https://example.org">https://example.org</a>`,
+	} {
+		if !strings.Contains(res.BodyHTML, want) {
+			t.Errorf("-extensions output lacks %s:\n%s", want, res.BodyHTML)
+		}
+	}
+	plain, err := ConvertWithOptions(src, Options{})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions: %v", err)
+	}
+	if strings.Contains(plain.BodyHTML, `class="permalink"`) {
+		t.Errorf("a navigation extension rendered without -extensions:\n%s", plain.BodyHTML)
+	}
+}
+
+// External links next to an autolink: carve.autolink runs first in the
+// bundle, and the engine then fails the external-links transform.
+func TestExtensionsMarkExternalLinks(t *testing.T) {
+	t.Skip("carve.externalLinks fails on a view with an autolink node (markup-carve/carve-rs#4484)")
+	res, err := ConvertWithOptions("[x](https://ext.org) and https://a.org\n", Options{Extensions: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions: %v", err)
+	}
+	if !strings.Contains(res.BodyHTML, `target="_blank"`) {
+		t.Errorf("external links are not marked:\n%s", res.BodyHTML)
+	}
+}
