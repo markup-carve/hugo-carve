@@ -55,11 +55,14 @@ hugo-carve --content content --profile article
 
 An over-limit page stops the build and produces no output file.
 
-`--extensions` enables the bundled extension set. The Carve 0.2 engine in
-carve-go can select standard extensions, while the full 0.1 bundle still waits
-on [carve-rs#4342](https://github.com/markup-carve/carve-rs/issues/4342)
-and [carve-rs#4343](https://github.com/markup-carve/carve-rs/issues/4343).
-The flag reports that gap. `--static` renders in the engine's static mode, which
+`--extensions` enables the bundled extension set: every Carve 0.2 standard
+extension carve-go lists (`carve.StandardExtensions`, less
+`carve.inlineFootnotesToParentheses`), each with its standard renderer. The 0.1
+bundle also had heading permalinks, heading numbers, a table of contents,
+external links and autolink; carve-rs has no 0.2 version of those yet
+([carve-rs#4476](https://github.com/markup-carve/carve-rs/issues/4476)). The
+0.2 lint pass reads no extensions (C2-W-109), so `--lint --extensions` lints as
+`--lint` does. `--static` renders in the engine's static mode, which
 flattens interactive constructs so the generated HTML has no runtime
 dependency.
 

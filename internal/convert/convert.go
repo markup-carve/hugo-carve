@@ -54,11 +54,9 @@ func Convert(source string) (Result, error) {
 // Options configures a conversion. The zero value renders core Carve (no
 // bundled extensions), matching Convert.
 type Options struct {
-	// Extensions enables the engine's bundled extensions (diagram presets,
-	// details, spoiler, code callouts, math and the rest). The Carve 0.2
-	// engine reached through carve-go has only part of that bundle, so a
-	// conversion with Extensions set fails with ErrExtensionsUnavailable
-	// instead of silently rendering core Carve.
+	// Extensions enables the engine's standard extensions (diagram presets,
+	// details, spoiler, code callouts, math and the rest), each with its
+	// standard renderer.
 	Extensions bool
 
 	// Static renders in the 0.2 "static" mode: self-contained HTML with
@@ -147,19 +145,16 @@ type Options struct {
 	SourcePath string
 }
 
-// ErrExtensionsUnavailable reports that the Carve 0.2 engine in carve-go
-// cannot provide the full bundle yet (markup-carve/carve-rs#4342 and #4343).
-var ErrExtensionsUnavailable = errors.New("the bundled extensions are not available yet in the Carve 0.2 engine (markup-carve/carve-rs#4342 and markup-carve/carve-rs#4343)")
-
 // engineOptions maps this package's options to the 0.2 option set.
 func engineOptions(opts Options) (carve.Options, error) {
 	if opts.Safe && opts.RawHTML {
 		return carve.Options{}, errors.New("Safe and RawHTML contradict each other: Safe is the default, set RawHTML only for trusted pages")
 	}
-	if opts.Extensions {
-		return carve.Options{}, ErrExtensionsUnavailable
-	}
 	out := carve.Options{RawHTML: opts.RawHTML, Profile: opts.Profile, Symbols: opts.Symbols}
+	if opts.Extensions {
+		out.Extensions = bundleExtensions()
+		out.Renderers = bundleRenderers()
+	}
 	if opts.Static {
 		out.Mode = "static"
 	}

@@ -1,7 +1,6 @@
 package convert
 
 import (
-	"errors"
 	"sort"
 	"strings"
 	"testing"
@@ -58,7 +57,7 @@ func engineRegistryKeys(t *testing.T) []string {
 // out of -extensions, and a key removed fails here instead of making every page
 // an error.
 func TestBundleExtensionsIsTheWholeRegistry(t *testing.T) {
-	skipExtensions(t)
+	t.Skip("reads the 0.1 registry from the engine's refusal message; 0.2 lists carve.StandardExtensions (TestBundleIsTheStandardList)")
 	want := engineRegistryKeys(t)
 	got := bundleExtensions()
 
@@ -90,7 +89,6 @@ func missing(from, in []string) []string {
 // bundleExtensions hands out a copy, so a caller cannot truncate the package's
 // list through the slice it was given.
 func TestBundleExtensionsIsNotAliased(t *testing.T) {
-	skipExtensions(t)
 	first := bundleExtensions()
 	if len(first) == 0 {
 		t.Fatal("the bundle is empty")
@@ -107,7 +105,6 @@ func TestBundleExtensionsIsNotAliased(t *testing.T) {
 // This is the case that failed outright on carve-go v0.1.5 while the name "all"
 // was still being sent, with no page produced at all.
 func TestExtensionsEnablesTheBundle(t *testing.T) {
-	skipExtensions(t)
 	res, err := ConvertWithOptions(spoilerSource, Options{Extensions: true})
 	if err != nil {
 		t.Fatalf("ConvertWithOptions: %v", err)
@@ -121,7 +118,7 @@ func TestExtensionsEnablesTheBundle(t *testing.T) {
 // has to come back unenabled. Without this, the test above would also pass for
 // a bundle that happened to be the engine's default.
 func TestTheBundleIsWhatEnablesTheExtension(t *testing.T) {
-	skipExtensions(t)
+	t.Skip("leaves out the 0.1 key spoiler; 0.2 names it carve.spoiler (TestTheBundleIsWhatEnablesTheSpoiler)")
 	var without []string
 	for _, k := range bundleExtensionKeys {
 		if k != "spoiler" {
@@ -152,7 +149,7 @@ func TestNoExtensionsLeavesTheBundleOff(t *testing.T) {
 // Static with no selection implies the bundle in carve-go, which is why
 // ConvertWithOptions no longer populates Extensions for it.
 func TestStaticStillEnablesTheBundle(t *testing.T) {
-	skipExtensions(t)
+	t.Skip("0.2 static mode no longer implies -extensions (CHANGELOG Unreleased)")
 	res, err := ConvertWithOptions(spoilerSource, Options{Static: true})
 	if err != nil {
 		t.Fatalf("ConvertWithOptions: %v", err)
@@ -162,22 +159,63 @@ func TestStaticStillEnablesTheBundle(t *testing.T) {
 	}
 }
 
-// skipExtensions names the engine gap that stops the bundle on the Carve 0.2
-// engine: carve-go cannot select the bundled extensions yet.
-func skipExtensions(t *testing.T) {
-	t.Helper()
-	t.Skip("bundled extensions not available yet in the Carve 0.2 engine: markup-carve/carve-rs#4342 and markup-carve/carve-rs#4343")
+// TestLintAcceptsTheBundle: the bundle reaches the render, and the lint pass,
+// which reads no extensions in 0.2 (C2-W-109), runs instead of refusing.
+func TestLintAcceptsTheBundle(t *testing.T) {
+	if _, err := Lint(spoilerSource, Options{Extensions: true}); err != nil {
+		t.Fatalf("Lint with Extensions: %v", err)
+	}
 }
 
-// TestExtensionsAreAClearErrorUntilTheEngineHasThem pins what -extensions does
-// until markup-carve/carve-rs#4342 and markup-carve/carve-rs#4343 lands: a refusal, never core Carve passed
-// off as the bundle.
-func TestExtensionsAreAClearErrorUntilTheEngineHasThem(t *testing.T) {
-	_, err := ConvertWithOptions(spoilerSource, Options{Extensions: true})
-	if !errors.Is(err, ErrExtensionsUnavailable) {
-		t.Fatalf("expected ErrExtensionsUnavailable, got %v", err)
+// The bundle is the engine's standard list, less the footnote rewrite that
+// 0.1 never bundled.
+func TestBundleIsTheStandardList(t *testing.T) {
+	got := strings.Join(bundleExtensions(), ",")
+	for _, name := range carve.StandardExtensions {
+		in := strings.Contains(","+got+",", ","+name+",")
+		if want := name != "carve.inlineFootnotesToParentheses"; in != want {
+			t.Errorf("%s in the bundle: %v, want %v", name, in, want)
+		}
 	}
-	if _, err := Lint(spoilerSource, Options{Extensions: true}); !errors.Is(err, ErrExtensionsUnavailable) {
-		t.Fatalf("expected ErrExtensionsUnavailable from Lint, got %v", err)
+}
+
+// Leave one out, in 0.2 names: without carve.spoiler the same document comes
+// back unenabled.
+func TestTheBundleIsWhatEnablesTheSpoiler(t *testing.T) {
+	var without []string
+	for _, k := range bundleExtensionKeys {
+		if k != "carve.spoiler" {
+			without = append(without, k)
+		}
+	}
+	got, err := carve.ToHTMLOptions(spoilerSource, carve.Options{Extensions: without})
+	if err != nil {
+		t.Fatalf("ToHTMLOptions: %v", err)
+	}
+	if !strings.Contains(got, spoilerOff) {
+		t.Errorf("dropping carve.spoiler from the bundle changed nothing:\n%s", got)
+	}
+}
+
+// Code callouts render through -extensions with their standard renderer.
+func TestExtensionsRenderCodeCallouts(t *testing.T) {
+	src := "```go\nx := 1 // <1>\n```\n\n<1> assign x\n"
+	res, err := ConvertWithOptions(src, Options{Extensions: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions: %v", err)
+	}
+	if !strings.Contains(res.BodyHTML, `class="callout" data-callout="1"`) || !strings.Contains(res.BodyHTML, `class="callouts"`) {
+		t.Errorf("callouts did not render:\n%s", res.BodyHTML)
+	}
+}
+
+// The graphviz preset claims a dot fence too, as in 0.1.
+func TestExtensionsClaimTheDotFence(t *testing.T) {
+	res, err := ConvertWithOptions("``` dot\ndigraph{a->b}\n```\n", Options{Extensions: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions: %v", err)
+	}
+	if !strings.Contains(res.BodyHTML, `<pre class="graphviz"`) {
+		t.Errorf("the dot fence was not claimed:\n%s", res.BodyHTML)
 	}
 }

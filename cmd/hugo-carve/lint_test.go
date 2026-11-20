@@ -107,6 +107,7 @@ func TestLint_NotRunByClean(t *testing.T) {
 // does not report a fragment link as broken. That difference is what shows
 // -extensions reaching the lint pass.
 func TestLint_ExtensionsReachTheLintPass(t *testing.T) {
+	t.Skip("0.2 lint reads no extensions (C2-W-109)")
 	content := lintSite(t, "[x](#nope)\n")
 	logged, _ := runCapture(t, "--content", content, "--quiet", "--lint")
 	if !strings.Contains(logged, "broken-fragment-link") {

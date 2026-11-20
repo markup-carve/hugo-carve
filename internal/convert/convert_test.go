@@ -147,7 +147,7 @@ func TestConvert_LeadingBraceIsBodyNotFrontMatter(t *testing.T) {
 // replace the literal angle-bracket token with a <b class="callout"> element,
 // and the callout list below the block becomes an <ol class="callouts">.
 func TestCarveGo_CodeCallouts(t *testing.T) {
-	skipExtensions(t)
+	t.Skip("selects extensions without their renderers, which 0.2 sets apart in Options.Renderers (TestExtensionsRenderCodeCallouts)")
 	src := "```go\nx := 1 // <1>\ny := 2 // <2>\n```\n\n<1> assign x\n<2> assign y\n"
 	html, err := carve.ToHTMLOptions(src, carve.Options{Extensions: bundleExtensions()})
 	if err != nil {
@@ -201,7 +201,6 @@ func min(a, b int) int {
 // renders as a hydration element only when Extensions is set (core Carve leaves
 // it a plain code block).
 func TestConvertWithOptions_ExtensionsEnableDiagrams(t *testing.T) {
-	skipExtensions(t)
 	src := "``` plantuml\nA -> B\n```\n"
 
 	off, err := Convert(src)
@@ -502,8 +501,7 @@ func TestConvertWithOptions_SafeOffIsUnchanged(t *testing.T) {
 // mode and the extensions are also on, which is the combination a hardened
 // site would actually run.
 func TestConvertWithOptions_SafeComposesWithTheOtherOptions(t *testing.T) {
-	// Extensions are left out until markup-carve/carve-rs#4342 and markup-carve/carve-rs#4343 lands.
-	res, err := ConvertWithOptions(rawHTMLSrc, Options{Safe: true, Static: true})
+	res, err := ConvertWithOptions(rawHTMLSrc, Options{Safe: true, Static: true, Extensions: true})
 	if err != nil {
 		t.Fatalf("ConvertWithOptions error: %v", err)
 	}

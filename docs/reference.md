@@ -99,7 +99,7 @@ Converts *.crv files into Hugo HTML content pages.
   -deps file
         write the include dependencies of every page to this JSON file
   -extensions
-        enable the bundled extensions (diagram presets, details, spoiler, code-callouts, math); the full 0.1 bundle awaits carve-rs#4342 and carve-rs#4343
+        enable the bundled extensions (diagram presets, details, spoiler, code-callouts, math and the other 0.2 standard extensions); heading permalinks, toc, external links and autolink await carve-rs#4476
   -include-root directory
         containment root for includes (default: the content directory). A relative value resolves against the working directory
   -includes {{ path }}
@@ -133,9 +133,11 @@ Converts *.crv files into Hugo HTML content pages.
 - `--clean` removes the generated `.html` files (the inverse operation).
 - `--extensions` enables the engine's bundled extensions: diagram fences render
   as hydration elements (`<pre class="plantuml">`, ...) for a client-side or
-  build-step renderer. The full 0.1 bundle is still pending in Carve 0.2
-  ([carve-rs#4342](https://github.com/markup-carve/carve-rs/issues/4342), [carve-rs#4343](https://github.com/markup-carve/carve-rs/issues/4343)), so the
-  flag is an error for now. Without it, diagram fences stay plain code blocks.
+  build-step renderer, and details, spoiler, code groups and callouts, list
+  tables, math and the rest render with their standard renderers. Heading
+  permalinks, toc, external links and autolink wait on
+  [carve-rs#4476](https://github.com/markup-carve/carve-rs/issues/4476).
+  Without the flag, diagram fences stay plain code blocks.
 - `--raw-html` emits raw HTML verbatim. Off by default; `--safe` names the
   default and is refused together with `--raw-html`. See
   [Raw HTML](#raw-html).
