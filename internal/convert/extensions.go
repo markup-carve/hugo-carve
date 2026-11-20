@@ -4,14 +4,12 @@ import carve "github.com/markup-carve/carve-go/v2"
 
 // The Carve 0.2 standard extensions that make up the bundle: every name in
 // carve.StandardExtensions except carve.inlineFootnotesToParentheses, which
-// rewrites footnotes and was never part of the 0.1 bundle, and carve.cite,
-// which carve.references already claims and which empties every citation next
-// to it (markup-carve/carve-rs#4485), plus the dot and
+// rewrites footnotes and was never part of the 0.1 bundle, plus the dot and
 // puml fence words of the graphviz and plantuml presets.
 var bundleExtensionKeys = func() []string {
 	var keys []string
 	for _, name := range carve.StandardExtensions {
-		if name != "carve.inlineFootnotesToParentheses" && name != "carve.cite" {
+		if name != "carve.inlineFootnotesToParentheses" {
 			keys = append(keys, name)
 		}
 	}

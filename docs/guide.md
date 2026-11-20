@@ -57,8 +57,7 @@ An over-limit page stops the build and produces no output file.
 
 `--extensions` enables the bundled extension set: every Carve 0.2 standard
 extension carve-go lists (`carve.StandardExtensions`, less
-`carve.inlineFootnotesToParentheses`, and less `carve.cite`, whose `:cite`
-citations `carve.references` renders), each with its standard renderer. As in
+`carve.inlineFootnotesToParentheses`), each with its standard renderer. As in
 0.1 that includes the navigation extensions: heading permalinks, heading
 numbers, heading level shift, the table of contents (`carve.toc` and the
 `::: toc` placement `carve.tocPlacement`), external links, autolink and the

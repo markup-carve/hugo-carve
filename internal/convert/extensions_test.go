@@ -168,12 +168,12 @@ func TestLintAcceptsTheBundle(t *testing.T) {
 }
 
 // The bundle is the engine's standard list, less the footnote rewrite that
-// 0.1 never bundled and carve.cite, which carve.references covers.
+// 0.1 never bundled.
 func TestBundleIsTheStandardList(t *testing.T) {
 	got := strings.Join(bundleExtensions(), ",")
 	for _, name := range carve.StandardExtensions {
 		in := strings.Contains(","+got+",", ","+name+",")
-		if want := name != "carve.inlineFootnotesToParentheses" && name != "carve.cite"; in != want {
+		if want := name != "carve.inlineFootnotesToParentheses"; in != want {
 			t.Errorf("%s in the bundle: %v, want %v", name, in, want)
 		}
 	}
@@ -231,7 +231,7 @@ func TestExtensionsRenderTheNavigationExtensions(t *testing.T) {
 		`class="permalink"`,
 		`<span class="section-number">1.1</span>`,
 		`<nav class="toc"`,
-		`<a href="https://example.org">https://example.org</a>`,
+		`<a href="https://example.org" rel="noopener noreferrer" target="_blank">https://example.org</a>`,
 	} {
 		if !strings.Contains(res.BodyHTML, want) {
 			t.Errorf("-extensions output lacks %s:\n%s", want, res.BodyHTML)
@@ -246,10 +246,8 @@ func TestExtensionsRenderTheNavigationExtensions(t *testing.T) {
 	}
 }
 
-// External links next to an autolink: carve.autolink runs first in the
-// bundle, and the engine then fails the external-links transform.
+// External links next to an autolink: carve.autolink runs first in the bundle.
 func TestExtensionsMarkExternalLinks(t *testing.T) {
-	t.Skip("carve.externalLinks fails on a view with an autolink node (markup-carve/carve-rs#4484)")
 	res, err := ConvertWithOptions("[x](https://ext.org) and https://a.org\n", Options{Extensions: true})
 	if err != nil {
 		t.Fatalf("ConvertWithOptions: %v", err)
