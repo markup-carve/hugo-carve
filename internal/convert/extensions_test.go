@@ -208,3 +208,14 @@ func TestExtensionsRenderCodeCallouts(t *testing.T) {
 		t.Errorf("callouts did not render:\n%s", res.BodyHTML)
 	}
 }
+
+// The graphviz preset claims a dot fence too, as in 0.1.
+func TestExtensionsClaimTheDotFence(t *testing.T) {
+	res, err := ConvertWithOptions("``` dot\ndigraph{a->b}\n```\n", Options{Extensions: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions: %v", err)
+	}
+	if !strings.Contains(res.BodyHTML, `<pre class="graphviz"`) {
+		t.Errorf("the dot fence was not claimed:\n%s", res.BodyHTML)
+	}
+}

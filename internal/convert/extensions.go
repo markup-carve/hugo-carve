@@ -4,7 +4,8 @@ import carve "github.com/markup-carve/carve-go/v2"
 
 // The Carve 0.2 standard extensions that make up the bundle: every name in
 // carve.StandardExtensions except carve.inlineFootnotesToParentheses, which
-// rewrites footnotes and was never part of the 0.1 bundle. The 0.1 navigation
+// rewrites footnotes and was never part of the 0.1 bundle, plus the dot and
+// puml fence words of the graphviz and plantuml presets. The 0.1 navigation
 // extensions (heading permalinks, toc, external links, autolink) have no 0.2
 // counterpart in carve-rs yet (markup-carve/carve-rs#4476).
 var bundleExtensionKeys = func() []string {
@@ -14,7 +15,9 @@ var bundleExtensionKeys = func() []string {
 			keys = append(keys, name)
 		}
 	}
-	return keys
+	// A named preset claims only its own fence word; 0.1 graphviz also
+	// claimed dot, and plantuml also puml.
+	return append(keys, "carve.fencedRender.dot", "carve.fencedRender.puml")
 }()
 
 // bundleRenderers selects the standard renderer of every bundled extension
