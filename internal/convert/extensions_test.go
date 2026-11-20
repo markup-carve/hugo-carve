@@ -168,12 +168,12 @@ func TestLintAcceptsTheBundle(t *testing.T) {
 }
 
 // The bundle is the engine's standard list, less the footnote rewrite that
-// 0.1 never bundled.
+// 0.1 never bundled and carve.cite, which carve.references covers.
 func TestBundleIsTheStandardList(t *testing.T) {
 	got := strings.Join(bundleExtensions(), ",")
 	for _, name := range carve.StandardExtensions {
 		in := strings.Contains(","+got+",", ","+name+",")
-		if want := name != "carve.inlineFootnotesToParentheses"; in != want {
+		if want := name != "carve.inlineFootnotesToParentheses" && name != "carve.cite"; in != want {
 			t.Errorf("%s in the bundle: %v, want %v", name, in, want)
 		}
 	}
@@ -256,5 +256,19 @@ func TestExtensionsMarkExternalLinks(t *testing.T) {
 	}
 	if !strings.Contains(res.BodyHTML, `target="_blank"`) {
 		t.Errorf("external links are not marked:\n%s", res.BodyHTML)
+	}
+}
+
+// Citations resolve against the references list under -extensions.
+func TestExtensionsResolveCitations(t *testing.T) {
+	src := "See :cite[knuth1984]{locator=\"p. 33\"}.\n\n::: references\n:: knuth1984\n: Knuth.\n:::\n"
+	res, err := ConvertWithOptions(src, Options{Extensions: true})
+	if err != nil {
+		t.Fatalf("ConvertWithOptions: %v", err)
+	}
+	for _, want := range []string{`data-cite-key="knuth1984"`, `<li id="ref-knuth1984">Knuth.</li>`} {
+		if !strings.Contains(res.BodyHTML, want) {
+			t.Errorf("-extensions output lacks %s:\n%s", want, res.BodyHTML)
+		}
 	}
 }
