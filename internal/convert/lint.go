@@ -33,10 +33,8 @@ func Lint(source string, opts Options) ([]Finding, error) {
 	_, body := splitFrontMatter(source)
 	head := source[:len(source)-len(body)]
 
+	// 0.2 lint reads no extensions (C2-W-109), so opts.Extensions does not apply.
 	lintOpts := carve.LintOptions{}
-	if opts.Extensions {
-		return nil, ErrExtensionsUnavailable
-	}
 	page := ""
 	if opts.Includes {
 		lintOpts.Include = &carve.Include{Root: opts.IncludeRoot, SourcePath: opts.SourcePath}
