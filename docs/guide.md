@@ -57,11 +57,11 @@ An over-limit page stops the build and produces no output file.
 
 `--extensions` enables the bundled extension set: every Carve 0.2 standard
 extension carve-go lists (`carve.StandardExtensions`, less
-`carve.inlineFootnotesToParentheses`), each with its standard renderer. The 0.1
-bundle also had heading permalinks, heading numbers, a table of contents,
-external links and autolink; carve-rs has no 0.2 version of those yet
-([carve-rs#4476](https://github.com/markup-carve/carve-rs/issues/4476)). The
-0.2 lint pass reads no extensions (C2-W-109), so `--lint --extensions` lints as
+`carve.inlineFootnotesToParentheses`), each with its standard renderer. As in
+0.1 that includes the navigation extensions: heading permalinks, heading
+numbers, heading level shift, the table of contents (`carve.toc` and the
+`::: toc` placement `carve.tocPlacement`), external links, autolink and the
+link policy. The 0.2 lint pass reads no extensions (C2-W-109), so `--lint --extensions` lints as
 `--lint` does. `--static` renders in the engine's static mode, which
 flattens interactive constructs so the generated HTML has no runtime
 dependency.
