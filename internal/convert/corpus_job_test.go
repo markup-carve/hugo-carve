@@ -118,6 +118,12 @@ func corpusGatedTests(t *testing.T) []string {
 // The command run by the ci.yml job that sets CARVE_SPEC_CORPUS.
 func corpusJobCommand(t *testing.T) string {
 	t.Helper()
+	return jobCommand(t, "CARVE_SPEC_CORPUS")
+}
+
+// The command run by the ci.yml job that sets the environment variable key.
+func jobCommand(t *testing.T, key string) string {
+	t.Helper()
 	path := filepath.Join(repoRoot, ciWorkflow)
 	blob, err := os.ReadFile(path)
 	if err != nil {
@@ -127,7 +133,7 @@ func corpusJobCommand(t *testing.T) string {
 	for _, line := range strings.Split(string(blob), "\n") {
 		// The variable's own name appears in this file's prose too, so match
 		// the YAML key rather than the word.
-		if strings.Contains(line, "CARVE_SPEC_CORPUS:") {
+		if strings.Contains(line, key+":") {
 			seenVariable = true
 			continue
 		}
@@ -139,12 +145,12 @@ func corpusJobCommand(t *testing.T) string {
 		}
 	}
 	if !seenVariable {
-		t.Fatalf("no job in %s sets CARVE_SPEC_CORPUS, so TestSpecCorpus skips on every push "+
+		t.Fatalf("no job in %s sets %s, so the test that reads it skips on every push "+
 			"and every pull request while the job reports success. That is the state "+
 			"hugo-carve#11 was filed about; it is not a configuration this repository accepts.",
-			ciWorkflow)
+			ciWorkflow, key)
 	}
-	t.Fatalf("the %s job that sets CARVE_SPEC_CORPUS has no run: command after it", ciWorkflow)
+	t.Fatalf("the %s job that sets %s has no run: command after it", ciWorkflow, key)
 	return ""
 }
 
@@ -249,4 +255,21 @@ func TestTheCorpusJobRunsEveryCorpusGatedTest(t *testing.T) {
 	if regexp.MustCompile("TestSpecCorpus").MatchString("TestConvert_Idempotent") {
 		t.Fatal("the filter check is not matching names")
 	}
+}
+
+// The next2 conformance job must reach TestConformance, which skips without
+// CARVE_CONFORMANCE (hugo-carve#59).
+func TestTheConformanceJobRunsTestConformance(t *testing.T) {
+	command := jobCommand(t, "CARVE_CONFORMANCE")
+	patterns, ok := goTestFilters(t, command)
+	if !ok {
+		t.Fatalf("the conformance job's command is %q, and nothing it reaches runs go test", command)
+	}
+	for _, pattern := range patterns {
+		if pattern == "" || regexp.MustCompile(pattern).MatchString("TestConformance") {
+			return
+		}
+	}
+	t.Fatalf("the conformance job runs go test with -run %s, which never executes TestConformance",
+		strings.Join(patterns, " / "))
 }
