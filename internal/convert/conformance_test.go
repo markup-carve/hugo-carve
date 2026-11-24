@@ -125,13 +125,26 @@ func requireWholeExamples(t *testing.T, conformanceDir string, examples []confor
 	}
 	heading := regexp.MustCompile(`(?m)^Example [0-9]+(?: |$)`)
 	specDir := filepath.Dir(filepath.Clean(conformanceDir))
-	var short []string
-	for document, got := range perDocument {
-		blob, err := os.ReadFile(filepath.Join(specDir, document))
-		if err != nil {
+	for document := range perDocument {
+		if _, err := os.Stat(filepath.Join(specDir, document)); err != nil {
 			t.Fatalf("examples.json names %s, which %s does not hold: %v", document, specDir, err)
 		}
-		if want := len(heading.FindAll(blob, -1)); want != got {
+	}
+	// Every document with examples, so one missing from examples.json
+	// entirely fails too.
+	documents, err := filepath.Glob(filepath.Join(specDir, "*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var short []string
+	for _, path := range documents {
+		blob, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		document := filepath.Base(path)
+		want, got := len(heading.FindAll(blob, -1)), perDocument[document]
+		if want != got {
 			short = append(short, fmt.Sprintf("%s: %d examples in the document, %d in examples.json", document, want, got))
 		}
 	}
@@ -199,9 +212,18 @@ func TestConformance(t *testing.T) {
 		}
 		got, err := convertWithEngineOptions(*e.Input, Options{}, opts)
 		if err != nil {
+			// A front matter block Hugo cannot read is refused by design.
+			if fm, _ := splitFrontMatter(*e.Input); fm != "" {
+				frontMatter++
+				return
+			}
 			compared++
 			mismatches = append(mismatches, e.ID)
 			details[e.ID] = "convert error: " + err.Error()
+			if direct, err := carve.ToHTMLOptions(*e.Input, opts); err == nil &&
+				strings.TrimRight(direct, "\n") == strings.TrimRight(*e.Expected.HTML, "\n") {
+				convertAdded = append(convertAdded, e.ID)
+			}
 			return
 		}
 		// As in TestSpecCorpus: an input that opens like front matter is
