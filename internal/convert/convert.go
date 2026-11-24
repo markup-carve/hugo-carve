@@ -163,13 +163,19 @@ func engineOptions(opts Options) (carve.Options, error) {
 
 // ConvertWithOptions is Convert with explicit engine options.
 func ConvertWithOptions(source string, opts Options) (Result, error) {
-	fm, body := splitFrontMatter(source)
-	fm, err := hugoFrontMatter(fm)
+	carveOpts, err := engineOptions(opts)
 	if err != nil {
 		return Result{}, err
 	}
+	return convertWithEngineOptions(source, opts, carveOpts)
+}
 
-	carveOpts, err := engineOptions(opts)
+// convertWithEngineOptions is the product path after the option mapping. The
+// 0.2 conformance test enters here to pass engine options Options has no field
+// for (roundtrip, urlPolicy, headingIds).
+func convertWithEngineOptions(source string, opts Options, carveOpts carve.Options) (Result, error) {
+	fm, body := splitFrontMatter(source)
+	fm, err := hugoFrontMatter(fm)
 	if err != nil {
 		return Result{}, err
 	}
