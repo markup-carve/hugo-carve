@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, next2]
+    branches: [main]
   pull_request:
-    branches: [main, next2]
+    branches: [main]
 
 # Each job declares timeout-minutes so a hung step fails fast
 # instead of inheriting the 360-minute GitHub default.
@@ -67,11 +67,11 @@ jobs:
   # not on the absolute count, because only the difference is something a pull
   # request here can act on. See scripts/corpus-drift.sh for why, and for what
   # the residual means.
-  # next2 renders with the Carve 0.2 engine, and carve main's tests/corpus is
-  # the 0.1 corpus; the conformance job below is its next2 counterpart.
+  # The 0.1 corpus job. main renders with the Carve 0.2 engine and carve main
+  # has no tests/corpus any more; the conformance job below replaces it.
   corpus:
     name: What the pin costs, in documents
-    if: (github.ref == 'refs/heads/main' || github.base_ref == 'main') && github.head_ref != 'next2'
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -93,13 +93,13 @@ jobs:
           CARVE_SPEC_CORPUS: ${{ github.workspace }}/carve-main/tests/corpus
         run: scripts/corpus-drift.sh
 
-  # The next2 counterpart of the corpus job: carve next2 has no tests/corpus,
+  # The 0.2 counterpart of the corpus job: carve main has no tests/corpus,
   # its corpus is spec/0.2/conformance (hugo-carve#59). Gates on the entries the
-  # pin renders wrongly that carve-go next2 renders correctly, as corpus-drift.sh
-  # does for main.
+  # pin renders wrongly that carve-go main renders correctly, as corpus-drift.sh
+  # did for 0.1.
   conformance:
     name: What the pin costs, in 0.2 conformance entries
-    if: (github.ref == 'refs/heads/next2' || github.base_ref == 'next2')
+    if: (github.ref == 'refs/heads/main' || github.base_ref == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -110,14 +110,13 @@ jobs:
         with:
           go-version: 'stable'
 
-      - name: Check out the conformance corpus from carve next2
+      - name: Check out the conformance corpus from carve main
         uses: actions/checkout@v7
         with:
           repository: markup-carve/carve
-          ref: next2
-          path: carve-next2
+          path: carve-main
 
-      - name: The conformance corpus, through the pin and through carve-go next2
+      - name: The conformance corpus, through the pin and through carve-go main
         env:
-          CARVE_CONFORMANCE: ${{ github.workspace }}/carve-next2/spec/0.2/conformance
+          CARVE_CONFORMANCE: ${{ github.workspace }}/carve-main/spec/0.2/conformance
         run: scripts/conformance-drift.sh

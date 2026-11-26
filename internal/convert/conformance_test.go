@@ -16,7 +16,7 @@ import (
 
 // The Carve 0.2 conformance corpus, driven through Convert.
 //
-// carve `next2` has no tests/corpus. Its corpus is spec/0.2/conformance:
+// carve `main` has no tests/corpus. Its corpus is spec/0.2/conformance:
 // examples.json (every example of the spec documents) and clause-cases.json
 // (inputs a clause decides that no example holds). This test renders every
 // `render` entry of both that states `expected.html` and compares the HTML byte
@@ -157,7 +157,7 @@ func requireWholeExamples(t *testing.T, conformanceDir string, examples []confor
 func TestConformance(t *testing.T) {
 	dir := os.Getenv("CARVE_CONFORMANCE")
 	if dir == "" {
-		t.Skip("CARVE_CONFORMANCE not set; the next2 conformance job in ci.yml sets it")
+		t.Skip("CARVE_CONFORMANCE not set; the conformance job in ci.yml sets it")
 	}
 
 	tolerance := 0

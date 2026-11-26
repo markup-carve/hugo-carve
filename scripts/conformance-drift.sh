@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# What the go.mod pin costs on next2, in conformance entries.
+# What the go.mod pin costs on main, in conformance entries.
 #
 # The Carve 0.2 counterpart of corpus-drift.sh (read that file for the
 # reasoning): drives spec/0.2/conformance through Convert twice, once with the
-# pinned carve-go and once with carve-go `next2` HEAD, and fails only on the
-# entries the pin renders wrongly that carve-go next2 renders correctly. The
-# residual, entries that diverge with carve-go next2 too, is carve-go's embedded
+# pinned carve-go and once with carve-go `main` HEAD, and fails only on the
+# entries the pin renders wrongly that carve-go main renders correctly. The
+# residual, entries that diverge with carve-go main too, is carve-go's embedded
 # wasm trailing the spec and is printed as a warning.
 #
-# Requires CARVE_CONFORMANCE, pointing at <carve next2>/spec/0.2/conformance.
+# Requires CARVE_CONFORMANCE, pointing at <carve main>/spec/0.2/conformance.
 
 set -euo pipefail
 
@@ -50,8 +50,8 @@ echo "go.mod requires $(grep -oE 'github\.com/markup-carve/carve-go v[^ ]+' go.m
 measure pinned
 
 echo
-echo "== the conformance corpus through Convert, with carve-go next2 =="
-go get "github.com/markup-carve/carve-go@next2"
+echo "== the conformance corpus through Convert, with carve-go main =="
+go get "github.com/markup-carve/carve-go@main"
 echo "replaced with $(grep -oE 'github\.com/markup-carve/carve-go v[^ ]+' go.mod | head -1 | awk '{print $2}')"
 measure current
 
@@ -61,21 +61,21 @@ current_count="$(wc -l < "${work}/current.divergent" | tr -d ' ')"
 
 echo
 echo "pinned carve-go : ${pinned_count} of ${comparable} entries diverge"
-echo "carve-go next2  : ${current_count} of ${comparable} entries diverge"
+echo "carve-go main  : ${current_count} of ${comparable} entries diverge"
 
 if [ "${current_count}" -gt 0 ]; then
-    echo "::warning::${current_count} of ${comparable} conformance entries diverge with carve-go next2 too - that is carve-go's embedded wasm trailing the spec, not fixable here"
+    echo "::warning::${current_count} of ${comparable} conformance entries diverge with carve-go main too - that is carve-go's embedded wasm trailing the spec, not fixable here"
 fi
 
 comm -23 "${work}/pinned.divergent" "${work}/current.divergent" > "${work}/pin-only"
 attributable="$(wc -l < "${work}/pin-only" | tr -d ' ')"
 if [ "${attributable}" -gt 0 ]; then
     echo
-    echo "entries the pin renders wrongly and carve-go next2 renders correctly:"
+    echo "entries the pin renders wrongly and carve-go main renders correctly:"
     sed 's/^/  /' "${work}/pin-only"
-    echo "::error::the go.mod pin renders ${attributable} conformance entries wrongly that carve-go next2 renders correctly. Bump it: go get github.com/markup-carve/carve-go@next2"
+    echo "::error::the go.mod pin renders ${attributable} conformance entries wrongly that carve-go main renders correctly. Bump it: go get github.com/markup-carve/carve-go@main"
     exit 1
 fi
 
 echo
-echo "the pin costs no conformance entries against carve-go next2"
+echo "the pin costs no conformance entries against carve-go main"
