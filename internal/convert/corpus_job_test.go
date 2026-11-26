@@ -257,7 +257,7 @@ func TestTheCorpusJobRunsEveryCorpusGatedTest(t *testing.T) {
 	}
 }
 
-// The next2 conformance job must reach TestConformance, which skips without
+// The conformance job must reach TestConformance, which skips without
 // CARVE_CONFORMANCE (hugo-carve#59).
 func TestTheConformanceJobRunsTestConformance(t *testing.T) {
 	command := jobCommand(t, "CARVE_CONFORMANCE")

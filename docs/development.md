@@ -9,12 +9,12 @@ directive using the checkout's actual path, for example:
 replace github.com/markup-carve/carve-go => ../carve-go
 ```
 
-Do not commit the local `replace`. On `next2`, `go.mod` pins an unreleased
-carve-go `next2` commit by pseudo-version, and the code imports its Carve 0.2
+Do not commit the local `replace`. On `main`, `go.mod` pins an unreleased
+carve-go commit by pseudo-version, and the code imports its Carve 0.2
 package `github.com/markup-carve/carve-go/v2`. Move the pin with:
 
 ```
-go get github.com/markup-carve/carve-go@<next2 commit>
+go get github.com/markup-carve/carve-go@<main commit>
 ```
 
 Run the tests:
