@@ -1,6 +1,6 @@
 # hugo-carve
 
-Hugo preprocessor for Carve pages, using carve-go v0.1.11. It converts `.crv` content before Hugo builds the site. Read the [Carve documentation](https://markup-carve.github.io/carve/) for the language syntax.
+Hugo preprocessor for Carve pages, using the Carve 0.2 engine from carve-go `next2` (unreleased). It converts `.crv` content before Hugo builds the site. Read the [Carve documentation](https://markup-carve.github.io/carve/) for the language syntax.
 
 ## Install
 

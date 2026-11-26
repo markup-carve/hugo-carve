@@ -9,6 +9,26 @@ so engine pin moves get an entry of their own.
 
 ## [Unreleased]
 
+### Changed
+
+- Port to Carve 0.2: render and lint through carve-go's `next2` Carve 0.2
+  package, pinned by commit. Page HTML follows 0.2 (see the spec's
+  `UPGRADING.md`).
+- Raw HTML is escaped by default. `--raw-html` emits it verbatim; `--safe` names
+  the default and is refused together with `--raw-html`.
+- `--static` uses the 0.2 static mode and no longer implies `--extensions`.
+- `caption-looking-paragraph` is on by default, so `--caption-hints` only
+  implies `--lint`. Without `--includes`, lint reports each directive as
+  `include-no-resolver`. Lint lines for included files drop the
+  "(included at ...)" suffix.
+- An over-cap page under `--profile` is refused by the engine itself; the error
+  names the body size, the profile and the cap.
+
+### Known gaps
+
+- `--includes` and `--extensions` fail with a "not available yet" error until
+  carve-go supports them (markup-carve/carve-go#115, markup-carve/carve-go#116).
+
 ## v0.1.7 - 2026-11-12
 
 ### Fixed

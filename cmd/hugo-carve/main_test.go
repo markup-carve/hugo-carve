@@ -267,17 +267,30 @@ func TestRun_SafeFlagReachesTheRenderedPage(t *testing.T) {
 	}
 }
 
-// TestRun_WithoutSafeFlagRawHTMLStillPassesThrough is the other half: the
-// default is what it has always been, so an existing site sees no change.
+// TestRun_WithoutSafeFlagRawHTMLStillPassesThrough is the other half. In Carve
+// 0.2 the default escapes raw HTML (U-076), so only --raw-html lets it through.
 func TestRun_WithoutSafeFlagRawHTMLStillPassesThrough(t *testing.T) {
 	content, devNull := safeFixture(t)
 
 	if err := run([]string{"--content", content, "--quiet"}, devNull, devNull); err != nil {
 		t.Fatalf("run error: %v", err)
 	}
+	if out := readPage(t, filepath.Join(content, "page.html")); strings.Contains(out, "<script>") {
+		t.Errorf("U-076: without --raw-html raw HTML should be escaped, got:\n%s", out)
+	}
+	if err := run([]string{"--content", content, "--quiet", "--raw-html"}, devNull, devNull); err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	out := readPage(t, filepath.Join(content, "page.html"))
 	if !strings.Contains(out, "<div class=\"x\"><script>alert(1)</script></div>") {
-		t.Errorf("without --safe raw HTML should still pass through, got:\n%s", out)
+		t.Errorf("with --raw-html raw HTML should pass through, got:\n%s", out)
+	}
+}
+
+func TestRun_SafeAndRawHTMLAreRefusedTogether(t *testing.T) {
+	content, devNull := safeFixture(t)
+	if err := run([]string{"--content", content, "--quiet", "--safe", "--raw-html"}, devNull, devNull); err == nil {
+		t.Fatal("expected --safe with --raw-html to be refused")
 	}
 }
 

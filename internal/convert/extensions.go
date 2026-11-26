@@ -1,49 +1,33 @@
 package convert
 
-// The extension registry keys that make up the full bundle.
-//
-// carve-go up to v0.1.4 sent the whole bundle for any non-empty slice, so this
-// package asked for it with the single name "all". v0.1.5 selects by registry
-// key instead, and "all" is not a key: it is refused, so every page rendered
-// with -extensions or -static failed outright.
-//
-// A recorded list goes stale the moment the registry gains a key.
-// TestBundleExtensionsIsTheWholeRegistry holds it to the engine's own registry
-// by asking the engine, so a new extension fails this package rather than
-// being silently left out of the bundle.
-var bundleExtensionKeys = []string{
-	"autolink",
-	"citations",
-	"code-callouts",
-	"code-group",
-	"color-swatch",
-	"details",
-	"external-links",
-	"fenced-render",
-	"fenced-render-abc",
-	"fenced-render-chart",
-	"fenced-render-d2",
-	"fenced-render-graphviz",
-	"fenced-render-plantuml",
-	"fenced-render-vega-lite",
-	"fenced-render-wavedrom",
-	"glossary",
-	"heading-level-shift",
-	"heading-numbers",
-	"heading-permalinks",
-	"heading-reference",
-	"img-fence",
-	"index",
-	"list-table",
-	"math-block",
-	"smart-quotes",
-	"semantic-span",
-	"spoiler",
-	"tabs",
-	"tab-normalize",
-	"table-of-contents",
-	"toc",
-	"wikilinks",
+import carve "github.com/markup-carve/carve-go/v2"
+
+// The Carve 0.2 standard extensions that make up the bundle: every name in
+// carve.StandardExtensions except carve.inlineFootnotesToParentheses, which
+// rewrites footnotes and was never part of the 0.1 bundle, plus the dot and
+// puml fence words of the graphviz and plantuml presets.
+var bundleExtensionKeys = func() []string {
+	var keys []string
+	for _, name := range carve.StandardExtensions {
+		if name != "carve.inlineFootnotesToParentheses" {
+			keys = append(keys, name)
+		}
+	}
+	// A named preset claims only its own fence word; 0.1 graphviz also
+	// claimed dot, and plantuml also puml.
+	return append(keys, "carve.fencedRender.dot", "carve.fencedRender.puml")
+}()
+
+// bundleRenderers selects the standard renderer of every bundled extension
+// that has one.
+func bundleRenderers() map[string]string {
+	out := make(map[string]string, len(bundleExtensionKeys))
+	for _, name := range bundleExtensionKeys {
+		if name != "carve.cite" {
+			out[name] = "standard"
+		}
+	}
+	return out
 }
 
 // bundleExtensions returns a fresh copy, so a caller holding the slice in

@@ -186,38 +186,28 @@ func TestConvert_UnknownProfileSurfacesTheEngineError(t *testing.T) {
 		if err == nil {
 			t.Fatalf("profile %q: expected the engine to refuse an unknown name", name)
 		}
-		if !strings.Contains(err.Error(), "unknown profile") {
+		// C2-H-129: the 0.2 engine names the option and the refused value.
+		if !strings.Contains(err.Error(), "is not a value of the option") {
 			t.Errorf("profile %q: expected the engine's own message, got: %v", name, err)
 		}
 	}
 }
 
-// TestCheckProfileCap_DefersToARenderThatSucceeded is the cap-drift case, and it
-// is the reason the guard tests emptiness at all. profileMaxBytes restates a
-// number that lives in the engine; if the engine RAISES a cap, an over-cap body
-// by this package's stale reckoning still renders, and a guard written on
-// length alone would refuse a document the engine was perfectly happy with.
+// The host-side cap guard existed because the 0.1 engine discarded an over-cap
+// body silently (markup-carve/carve-rs#1190). The 0.2 engine refuses it with an
+// error, so the guard is gone; TestConvert_OverCapBodyIsAnError covers the
+// refusal.
 func TestCheckProfileCap_DefersToARenderThatSucceeded(t *testing.T) {
-	body := strings.Repeat("a", 10_001)
-	if err := checkProfileCap("minimal", body, "<p>rendered</p>\n"); err != nil {
-		t.Errorf("a body the engine rendered should never be refused here, got: %v", err)
-	}
-	if err := checkProfileCap("minimal", body, "\n"); err == nil {
-		t.Error("a body the engine discarded should be refused")
+	res, err := ConvertWithOptions("Short body.\n", Options{Profile: "minimal"})
+	if err != nil || !strings.Contains(res.BodyHTML, "Short body.") {
+		t.Fatalf("a body under the profile cap should render, got %q, %v", res.BodyHTML, err)
 	}
 }
 
-// TestProfileMaxBytes_CoversOnlyTheCappedProfiles keeps the table from growing a
-// number for a profile that caps nothing, which would refuse pages the engine
-// accepts.
 func TestProfileMaxBytes_CoversOnlyTheCappedProfiles(t *testing.T) {
-	want := map[string]int{"comment": 100_000, "minimal": 10_000}
-	if len(profileMaxBytes) != len(want) {
-		t.Fatalf("profileMaxBytes = %v, want %v", profileMaxBytes, want)
-	}
-	for name, max := range want {
-		if profileMaxBytes[name] != max {
-			t.Errorf("%s: cap is %d, want %d", name, profileMaxBytes[name], max)
+	for _, profile := range []string{"comment", "minimal"} {
+		if _, err := ConvertWithOptions(pageOf(200_000), Options{Profile: profile}); err == nil {
+			t.Errorf("profile %q accepted an over-cap body", profile)
 		}
 	}
 }
@@ -230,8 +220,10 @@ func TestConvert_RawHTMLPerProfile(t *testing.T) {
 	src := "```=html\n<div class=\"x\">raw</div>\n```\n"
 	const raw = `<div class="x">raw</div>`
 
+	// U-076: raw HTML is escaped by default in 0.2, so "full" and no profile
+	// emit it only with RawHTML set.
 	for _, profile := range []string{"", "full"} {
-		res, err := ConvertWithOptions(src, Options{Profile: profile})
+		res, err := ConvertWithOptions(src, Options{Profile: profile, RawHTML: true})
 		if err != nil {
 			t.Fatalf("profile %q: ConvertWithOptions error: %v", profile, err)
 		}
@@ -247,8 +239,10 @@ func TestConvert_RawHTMLPerProfile(t *testing.T) {
 		if strings.Contains(res.BodyHTML, raw) {
 			t.Errorf("profile %q should not emit a live raw block, got:\n%s", profile, res.BodyHTML)
 		}
-		if profile != "minimal" && !strings.Contains(res.BodyHTML, `<pre><code class="language-html">`) {
-			t.Errorf("profile %q should show denied raw blocks as code, got:\n%s", profile, res.BodyHTML)
+		// U-293 (A-32): under a restricting profile a raw block is a paragraph
+		// of its value in 0.2, not a code block.
+		if profile != "minimal" && !strings.Contains(res.BodyHTML, `<p>&lt;div class="x"&gt;raw&lt;/div&gt;</p>`) {
+			t.Errorf("profile %q should show denied raw blocks as escaped text, got:\n%s", profile, res.BodyHTML)
 		}
 		if !strings.Contains(res.BodyHTML, "&lt;div") {
 			t.Errorf("profile %q should escape the raw block, got:\n%s", profile, res.BodyHTML)

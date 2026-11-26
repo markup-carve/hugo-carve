@@ -91,8 +91,7 @@ Usage: hugo-carve [flags]
 Converts *.crv files into Hugo HTML content pages.
 
   -caption-hints
-        also report a caption-looking paragraph next to a table or image
-        (implies -lint)
+        implies -lint; the caption-looking-paragraph rule it enabled in 0.1 is on by default since Carve 0.2
   -clean
         remove generated .html outputs instead of building them
   -content string
@@ -100,39 +99,31 @@ Converts *.crv files into Hugo HTML content pages.
   -deps file
         write the include dependencies of every page to this JSON file
   -extensions
-        enable the bundled extensions (diagram presets - mermaid, plantuml, d2,
-        graphviz, ... - plus details, spoiler, code-callouts, color, math)
+        enable the bundled extensions (diagram presets, details, spoiler, code-callouts, math, heading permalinks and numbers, the table of contents, autolink and the other 0.2 standard extensions)
   -include-root directory
-        containment root for includes (default: the content directory). A
-        relative value resolves against the working directory
-  -includes
+        containment root for includes (default: the content directory). A relative value resolves against the working directory
+  -includes {{ path }}
         expand {{ path }} includes from disk, contained to -include-root
   -lint
-        report the engine's lint findings for every page on stderr, one line
-        each; pages are still converted
+        report the engine's lint findings for every page on stderr, one line each; pages are still converted
   -lint-strict
         like -lint, and exit 1 when any page has a finding (implies -lint)
   -out string
         output directory (default: in place, next to the source)
   -profile full|article|comment|minimal
-        engine profile restricting what a document may contain and how large
-        it may be: full|article|comment|minimal (default: off, the engine's
-        full behavior). comment and minimal also cap the body at 100000 and
-        10000 bytes; an over-cap page is an error, never a blank page
+        engine profile restricting what a document may contain and how large it may be: full|article|comment|minimal (default: off, the engine's full behavior). comment and minimal also cap the body; an over-cap page is an error, never a blank page
   -quiet
         suppress per-file log output
+  -raw-html
+        emit raw HTML (=html blocks and {=html} spans) verbatim; only for pages the site authored itself
   -safe
-        escape raw HTML (=html blocks and {=html} spans) instead of emitting
-        it; set this for content the site did not author
+        escape raw HTML (=html blocks and {=html} spans); this is the default since Carve 0.2 and contradicts -raw-html
   -static
-        self-contained static HTML: flatten interactive constructs and degrade
-        diagrams/math to source (implies -extensions)
+        self-contained static HTML: render in the engine's static mode, which flattens interactive constructs
   -symbol NAME=VALUE
-        one symbol as NAME=VALUE (repeatable; applied after -symbols, so it
-        overrides a file)
+        one symbol as NAME=VALUE (repeatable; applied after -symbols, so it overrides a file)
   -symbols file
-        path to a JSON file mapping a symbol name to what :name: renders as
-        (repeatable; merged left to right)
+        path to a JSON file mapping a symbol name to what :name: renders as (repeatable; merged left to right)
 ```
 
 - `--content DIR` selects the tree to scan (default `content`).
@@ -140,18 +131,20 @@ Converts *.crv files into Hugo HTML content pages.
   mirroring the source layout, instead of next to the `.crv` source. Useful if
   you prefer to keep generated files out of your authored tree.
 - `--clean` removes the generated `.html` files (the inverse operation).
-- `--extensions` enables the engine's bundled extensions. Diagram fences then
-  render as hydration elements (`<pre class="plantuml">`, `<pre class="mermaid">`,
-  ...) that a client-side or build-step renderer turns into pictures - e.g.
-  Graphviz/D2 offline via [`@markup-carve/carve-grammars`](https://github.com/markup-carve/carve-grammars)
-  WASM helpers, PlantUML via a Kroki server, Mermaid via mermaid.js. Without the
-  flag, diagram fences stay plain code blocks.
-- `--safe` escapes raw HTML instead of emitting it. Off by default. See
-  [Raw HTML and `--safe`](#raw-html-and---safe).
-- `--static` renders self-contained HTML: interactive constructs are flattened
-  and diagrams/math degrade to their source. Implies `--extensions`. (carve-go
-  has no build-time image renderer over the WASI boundary, so static mode
-  degrades diagrams to source rather than embedding an image.)
+- `--extensions` enables the engine's bundled extensions: diagram fences render
+  as hydration elements (`<pre class="plantuml">`, ...) for a client-side or
+  build-step renderer, and details, spoiler, code groups and callouts, list
+  tables, math and the rest render with their standard renderers. The
+  navigation extensions come with it, as in 0.1: heading permalinks, heading
+  numbers, heading level shift, a table of contents at the top and one where a
+  `::: toc` block stands, external links, autolink and the link policy.
+  Without the flag, diagram fences stay plain code blocks.
+- `--raw-html` emits raw HTML verbatim. Off by default; `--safe` names the
+  default and is refused together with `--raw-html`. See
+  [Raw HTML](#raw-html).
+- `--static` renders in the engine's `static` mode: self-contained HTML with
+  interactive constructs flattened. Since Carve 0.2 it no longer implies
+  `--extensions`.
 - `--profile NAME` restricts what a document may contain and how large it may
   be. Off by default. See [Profiles and their input caps](#profiles-and-their-input-caps).
 - `--symbols FILE` and `--symbol NAME=VALUE` supply the symbol map that decides
@@ -159,23 +152,21 @@ Converts *.crv files into Hugo HTML content pages.
 - `--lint` prints each lint finding as `hugo-carve: PATH:LINE:COLUMN: RULE:
   MESSAGE` on stderr and converts the pages as usual. `--lint-strict` also
   exits 1 after the run when there was any finding. The line counts the front
-  matter, so it points at the line in the file. With `--extensions` or
-  `--static` the linter runs with the bundled extensions, which changes some
-  findings: the bundle resolves fragment links the core rules report as broken.
+  matter, so it points at the line in the file; the column counts characters.
   With `--includes` it also lints every included Carve file; see
-  [Lint across includes](#lint-across-includes).
+  [Lint across includes](#lint-across-includes). Without `--includes`, every
+  `{{ path }}` directive is reported as `include-no-resolver`.
   The engine's default rules include hints for spellings that render fine but
-  are not canonical, such as a `---` thematic break (`thematic-break-spelling`)
-  or the deprecated `|=>` cell alignment (`deprecated-cell-alignment`). The
-  findings carry no severity, so `--lint-strict` fails on these hints too.
-- `--caption-hints` adds the engine's opt-in `caption-looking-paragraph` rule:
-  a paragraph such as `Table 1: Results` directly before or after a table or
-  image, which was probably meant as its caption. Implies `--lint`.
+  are not canonical, such as a `---` thematic break (`thematic-break-spelling`).
+  `--lint-strict` fails on every finding, hints included.
+- `--caption-hints` implies `--lint`. The `caption-looking-paragraph` rule it
+  enabled in 0.1 (a paragraph such as `Table 1: Results` directly before or
+  after a table or image) is on by default since Carve 0.2.
 
 `hugo-carve` takes flags and nothing else. An operand is refused with a message
 rather than ignored, because Go's flag parsing stops at the first non-flag
-argument: `hugo-carve content --safe` would otherwise read `content` as an
-operand, never apply `--safe`, and exit 0 having passed raw HTML through.
+argument: `hugo-carve content --raw-html` would otherwise read `content` as an
+operand and never apply the flag that follows it.
 
 ## Includes
 
@@ -186,6 +177,9 @@ the build asks:
 hugo-carve --content content --includes
 ```
 
+The pinned Carve 0.2 engine expands include directives under the selected
+containment root (C2-N-001).
+
 Paths resolve relative to the file that wrote them, and nothing resolves outside
 the containment root. The root is the content directory unless `--include-root`
 names another one, and an include that would leave it is not expanded.
@@ -194,13 +188,11 @@ A relative `--include-root` resolves against the directory you run the command
 from, as with any shell tool, and so does the default derived from `--content`.
 
 Front matter is split off before the body reaches the engine, and the directive
-still resolves from where the page actually lives: carve-go serves the body it
-was handed for the page's own path and the real tree for everything else.
+still resolves from where the page actually lives.
 
 A target that cannot be read leaves the directive as written and prints a line
 naming the page. The message does not say whether the file was missing or
-refused by containment: both report `include-unresolved`, so a page cannot be
-used to probe the filesystem.
+refused by containment, so a page cannot be used to probe the filesystem.
 
 A directive can take part of a file. `@region:name` keeps the lines between
 `%% #region name` and `%% #endregion name`, and `@lines:start-end` keeps a line
@@ -225,15 +217,15 @@ number instead.
 ### Lint across includes
 
 With `--includes`, `--lint` follows the includes and lints every included Carve
-file too. A finding there names the page, the included file and the chain of
-include sites:
+file too. A finding there names the page and the included file. The Carve 0.2
+diagnostic carries no chain of include sites, so the 0.1 "(included at ...)"
+suffix is gone:
 
 ```
-hugo-carve: content/page.crv: parts/frag.crv:3:1: unattached-block-attribute: ... (included at page.crv:6:1)
+hugo-carve: content/page.crv: parts/frag.crv:3:1: unattached-block-attribute: ...
 ```
 
-Included files are relative to the include root. A site in the page counts its
-front matter, like any other page position. An include that cannot be expanded
+Included files are relative to the include root. An include that cannot be expanded
 is reported once, by the include warning above, and not again by the linter.
 
 ### Knowing when to run again
@@ -252,9 +244,9 @@ is reported once, by the include warning above, and not again by the linter.
 
 `targets` are host paths and are complete. `unresolved` holds directives as
 written, because no host path was ever established for one, so those cannot be
-watched. An entry carrying `"incomplete": true` means the engine's warning cap
-was reached and `unresolved` is a sample; rebuild unconditionally rather than
-trusting it (markup-carve/carve-rs#1676).
+watched. An entry carrying `"incomplete": true` means the engine's diagnostic
+cap was reached and `unresolved` is a sample; rebuild unconditionally rather
+than trusting it.
 
 There is no call into Hugo's own dependency tracker, and there cannot be: Hugo
 runs as a separate process after this one and exposes no plugin API. The
@@ -264,11 +256,11 @@ manifest is for whatever drives the two.
 > walk converts them and Hugo publishes them. Keep fragments outside `content`
 > and point `--include-root` at the tree above both.
 
-## Raw HTML and `--safe`
+## Raw HTML
 
-Carve renders a `=html` block and a `` `...`{=html} `` span verbatim, by
-design - that is what raw passthrough is for. `--safe` escapes them instead, so
-they reach the page as visible text:
+Since Carve 0.2 a `=html` block and a `` `...`{=html} `` span are escaped by
+default, so they reach the page as visible text. `--raw-html` lets them through
+verbatim:
 
 ````
 Before.
@@ -280,15 +272,7 @@ Before.
 Inline: `<b>bold</b>`{=html} tail.
 ````
 
-Without `--safe` (the default):
-
-```html
-<p>Before.</p>
-<div class="x"><script>alert(1)</script></div>
-<p>Inline: <b>bold</b> tail.</p>
-```
-
-With `--safe`:
+By default (and with `--safe`, which names the default):
 
 ```html
 <p>Before.</p>
@@ -297,45 +281,35 @@ With `--safe`:
 <p>Inline: &lt;b&gt;bold&lt;/b&gt; tail.</p>
 ```
 
-**Default: off.** A site that adds nothing to its build command renders exactly
-what it rendered before this flag existed. Turn it on for any tree whose pages
-can come from outside the site's own authors - a docs site taking
-contributions, or any build where a page can arrive in a pull request:
+With `--raw-html`:
 
-```bash
-hugo-carve --content content --safe && hugo
+```html
+<p>Before.</p>
+<div class="x"><script>alert(1)</script></div>
+<p>Inline: <b>bold</b> tail.</p>
 ```
 
-### What `--safe` does and does not cover
+A 0.1 site that relied on raw passthrough adds `--raw-html` to its build. Only
+do that for a tree whose pages come from the site's own authors, never for a
+docs site taking contributions or any build where a page can arrive in a pull
+request.
 
-It covers raw HTML passthrough, and that is the whole of it - because that is
-the whole of what needs a switch. Carve's hardening is **always on** and is not
-what this flag controls:
+### What the default does and does not cover
 
-| | without `--safe` | with `--safe` |
+| | default | with `--raw-html` |
 |---|---|---|
-| `=html` block, `{=html}` span | emitted verbatim | escaped to text |
-| `javascript:` link destination | already blanked | blanked |
-| event-handler attribute (`onclick=`) | already dropped | dropped |
-| bidi override characters (Trojan Source) | already removed | removed |
-| a symbol value from `--symbol` / `--symbols` | inserted raw | **inserted raw** |
-| `{{ path }}` include with `--includes` | expanded | **left literal, no file read** |
+| `=html` block, `{=html}` span | escaped to text | emitted verbatim |
+| link destination the URL policy denies (`javascript:`) | blanked | blanked |
+| a symbol value from `--symbol` / `--symbols` | **inserted raw** | inserted raw |
 
-That last row is the one to read twice. `--safe` is a statement about the
-**document**; a symbol value is **site configuration**, so it is substituted
-unescaped either way. `--safe` is not a license to build a symbol map out of
-page content - see the security note under [Symbols](#symbols).
+A symbol value is **site configuration**, so it is substituted unescaped either
+way. Do not build a symbol map out of page content; see the security note under
+[Symbols](#symbols).
 
-`--safe` also turns includes off: with both flags, no file is read, every
-directive stays as written, and the run says so once on stderr. Content you do
-not trust should not choose files to pull in from the build host. The linter
-follows the same rule and does not open included files under `--safe`.
-
-Two further limits worth stating plainly. `--safe` is a rendering option, not a
-sandbox: it says nothing about what your Hugo templates, shortcodes or theme
-put on the page around the converted body. And it applies to what `hugo-carve`
-converts, so a `.html` file already sitting in `content/` is passed through by
-Hugo untouched, whatever this flag says.
+The escaping is a rendering option, not a sandbox: it says nothing about what
+your Hugo templates, shortcodes or theme put on the page around the converted
+body. And it applies to what `hugo-carve` converts, so a `.html` file already
+sitting in `content/` is passed through by Hugo untouched.
 
 ## Profiles and their input caps
 
@@ -351,24 +325,25 @@ What each name does, measured against the pinned engine:
 
 | profile | links | images | raw HTML | input cap |
 | --- | --- | --- | --- | --- |
-| off (default) | kept | kept | emitted unless `--safe` | none |
-| `full` | kept | kept | emitted unless `--safe` | none |
-| `article` | kept | kept | escaped | none |
-| `comment` | kept, with `rel="nofollow ugc"` | degraded to `[img: ALT]` | escaped | 100000 bytes |
-| `minimal` | reduced to their text | degraded to `[img: ALT]` | escaped | 10000 bytes |
+| off (default) | kept | kept | escaped unless `--raw-html` | none |
+| `full` | kept | kept | escaped unless `--raw-html` | none |
+| `article` | kept | kept | a paragraph of escaped text | none |
+| `comment` | kept, with `rel="nofollow ugc"` | degraded to `[img: ALT]` | a paragraph of escaped text | 100000 bytes |
+| `minimal` | reduced to their text | degraded to `[img: ALT]` | a paragraph of escaped text | 10000 bytes |
 
 `full` is the engine's full behavior and renders exactly what no profile at all
 renders, so it is a way to say the choice was deliberate rather than a change in
 output. For a Hugo *page* the useful names are `article` and `full`, and neither
 caps anything. `comment` and `minimal` are shaped for user-submitted snippets; they
-work on a page tree, but the cap below applies.
+work on a page tree, but the cap below applies. The three restricting profiles
+escape raw HTML even with `--raw-html`.
 
 The name is passed through as written. An unknown or wrongly-cased one comes
 back as the engine's own message, and names are case-sensitive:
 
 ```
 $ hugo-carve --content content --profile COMMENT
-hugo-carve: convert "content/page.crv": render carve body: carve: engine exited with code 1: carve: unknown profile: COMMENT (expected full|article|comment|minimal)
+hugo-carve: convert "content/page.crv": render 105-byte carve body under profile "COMMENT": carve2: option profile: "COMMENT" is not a value of the option
 $ echo $?
 1
 ```
@@ -377,7 +352,7 @@ $ echo $?
 
 The cap counts BYTES of the page BODY - front matter is split off before the
 engine sees anything and does not count toward it - and the count is bytes, not
-characters, so 5001 two-byte characters is 10001 bytes and over the `minimal`
+characters, so 5001 two-byte characters is 10002 bytes and over the `minimal`
 cap.
 
 A body over the cap is an ERROR that names the cap and the actual size, and no
@@ -385,18 +360,10 @@ A body over the cap is an ERROR that names the cap and the actual size, and no
 
 ```
 $ hugo-carve --content content --profile minimal
-hugo-carve: convert "content/page.crv": profile "minimal" discarded the whole body: it is 10001 bytes and the "minimal" profile caps input at 10000 bytes (front matter is not counted). Split the page, or render it with the "article" or "full" profile
+hugo-carve: convert "content/page.crv": render 10002-byte carve body under profile "minimal": carve2: the input is longer than the 10000 bytes the profile minimal accepts
 $ echo $?
 1
 ```
-
-That refusal is what makes the flag safe to use. The engine
-embedded in the pinned `carve-go` answers an over-cap document with an EMPTY
-render, exit status 0 and an empty stderr
-([carve-rs#1190](https://github.com/markup-carve/carve-rs/issues/1190)), so
-forwarding the option without the guard would write a blank page that Hugo
-publishes, with a green build and nothing in the log. A build that stops with a
-message beats a site that publishes an empty page.
 
 ## Symbols
 
