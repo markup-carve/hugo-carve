@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	carve "github.com/markup-carve/carve-go/v2"
+	carve "github.com/markup-carve/carve-go"
 )
 
 // What this repository itself does to a document, measured against the engine

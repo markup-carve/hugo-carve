@@ -1,6 +1,6 @@
 package convert
 
-import carve "github.com/markup-carve/carve-go/v2"
+import carve "github.com/markup-carve/carve-go"
 
 // The Carve 0.2 standard extensions that make up the bundle: every name in
 // carve.StandardExtensions except carve.inlineFootnotesToParentheses, which

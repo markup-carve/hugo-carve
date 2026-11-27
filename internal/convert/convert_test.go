@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	carve "github.com/markup-carve/carve-go/v2"
+	carve "github.com/markup-carve/carve-go"
 )
 
 // TestConvert_BodyHTML verifies that the Carve body is rendered to HTML with
