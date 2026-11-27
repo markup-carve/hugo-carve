@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	carve "github.com/markup-carve/carve-go/v2"
+	carve "github.com/markup-carve/carve-go"
 )
 
 // Result is the outcome of converting one Carve document.

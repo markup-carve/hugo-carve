@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	carve "github.com/markup-carve/carve-go/v2"
+	carve "github.com/markup-carve/carve-go"
 )
 
 // The spoiler construct renders differently with the extension on, which makes

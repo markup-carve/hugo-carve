@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	carve "github.com/markup-carve/carve-go/v2"
+	carve "github.com/markup-carve/carve-go"
 )
 
 // The Carve 0.2 conformance corpus, driven through Convert.

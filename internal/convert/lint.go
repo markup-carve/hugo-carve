@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	carve "github.com/markup-carve/carve-go/v2"
+	carve "github.com/markup-carve/carve-go"
 )
 
 // Finding is one lint finding, positioned in the file it arose in.
