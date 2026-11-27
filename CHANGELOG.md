@@ -9,25 +9,36 @@ so engine pin moves get an entry of their own.
 
 ## [Unreleased]
 
-### Changed
+## v0.2.0 - 2026-11-27
 
-- Port to Carve 0.2: render and lint through carve-go's `next2` Carve 0.2
-  package, pinned by commit. Page HTML follows 0.2 (see the spec's
-  `UPGRADING.md`).
+hugo-carve now renders Carve 0.2 through carve-go 0.2. Page HTML follows the 0.2
+rules; the spec's `UPGRADING.md` lists what changes. Re-check pages whose output
+you depend on.
+
+### Breaking
+
+- Pages render and lint through the Carve 0.2 binding of carve-go (#60, #72).
 - Raw HTML is escaped by default. `--raw-html` emits it verbatim; `--safe` names
-  the default and is refused together with `--raw-html`.
-- `--static` uses the 0.2 static mode and no longer implies `--extensions`.
+  the default and is refused together with `--raw-html` (#60).
+- `--static` uses the 0.2 static mode and no longer implies `--extensions` (#60).
 - `caption-looking-paragraph` is on by default, so `--caption-hints` only
   implies `--lint`. Without `--includes`, lint reports each directive as
   `include-no-resolver`. Lint lines for included files drop the
-  "(included at ...)" suffix.
+  "(included at ...)" suffix (#60).
 - An over-cap page under `--profile` is refused by the engine itself; the error
-  names the body size, the profile and the cap.
+  names the body size, the profile and the cap (#60).
 
-### Known gaps
+### Improvements
 
-- `--includes` and `--extensions` fail with a "not available yet" error until
-  carve-go supports them (markup-carve/carve-go#115, markup-carve/carve-go#116).
+- `--includes` expands includes through the 0.2 engine (#62).
+- `--extensions` enables the 0.2 standard extensions, including the navigation
+  extensions (table of contents, heading numbers and permalinks, autolinks),
+  external links, citations and references (#65, #66, #68).
+
+### Engine
+
+- Requires carve-go `ce0286c`, which embeds carve-rs
+  `284c05f30da3a00a0e7a1fd42fea9f5ce430d6dd` (#72).
 
 ## v0.1.7 - 2026-11-12
 
